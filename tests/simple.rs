@@ -1,3 +1,5 @@
+#![cfg(feature = "nightly")]
+
 use array_vec::ArrayVec;
 
 #[test]

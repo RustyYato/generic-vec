@@ -1,13 +1,21 @@
-use core::alloc::AllocError;
+#[cfg(feature = "nightly")]
+pub use core::alloc::AllocError;
+
+#[cfg(not(feature = "nightly"))]
+pub struct AllocError;
 
 #[cfg(feature = "alloc")]
-mod alloc;
+mod heap;
+#[cfg(feature = "nightly")]
 mod init;
+#[cfg(feature = "nightly")]
 mod uninit;
 
 #[cfg(feature = "alloc")]
-pub use alloc::Heap;
+pub use heap::Heap;
+#[cfg(feature = "nightly")]
 pub use init::{Array, Init, Slice};
+#[cfg(feature = "nightly")]
 pub use uninit::{Uninit, UninitArray, UninitSlice};
 
 pub unsafe trait RawVec {

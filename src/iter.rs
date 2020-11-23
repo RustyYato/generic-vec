@@ -11,14 +11,14 @@ pub use {
 
 use core::iter::FromIterator;
 
-use crate::{ArrayVec, GenericVec};
+use crate::{raw::RawVecInit, GenericVec};
 
-impl<V, A, const N: usize> FromIterator<V> for ArrayVec<A, N>
+impl<V, A: RawVecInit> FromIterator<V> for GenericVec<A>
 where
     Self: Extend<V>,
 {
     fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
-        let mut array = Self::new();
+        let mut array = Self::default();
         array.extend(iter);
         array
     }

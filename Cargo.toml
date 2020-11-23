@@ -12,5 +12,6 @@ default = ['std']
 
 std = ['alloc']
 alloc = []
+nightly = []
 
 [dependencies]

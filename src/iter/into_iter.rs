@@ -1,6 +1,8 @@
 use crate::{GenericVec, RawVec};
+#[cfg(feature = "nightly")]
+use core::iter::TrustedLen;
 use core::{
-    iter::{ExactSizeIterator, FusedIterator, TrustedLen},
+    iter::{ExactSizeIterator, FusedIterator},
     mem::ManuallyDrop,
     ptr,
 };
@@ -65,11 +67,13 @@ impl<'a, A: ?Sized + RawVec> IntoIterator for &'a GenericVec<A> {
 
 impl<A: ?Sized + RawVec> FusedIterator for IntoIter<A> {}
 impl<A: ?Sized + RawVec> ExactSizeIterator for IntoIter<A> {
+    #[cfg(feature = "nightly")]
     fn is_empty(&self) -> bool {
         self.index == self.vec.len
     }
 }
 
+#[cfg(feature = "nightly")]
 unsafe impl<A: ?Sized + RawVec> TrustedLen for IntoIter<A> {}
 
 impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {

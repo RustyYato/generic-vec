@@ -1,22 +1,32 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(min_const_generics, unsafe_block_in_unsafe_fn)]
-#![feature(
-    trusted_len,
-    min_specialization,
-    exact_size_is_empty,
-    allocator_api,
-    alloc_layout_extra
+#![cfg_attr(
+    feature = "nightly",
+    feature(min_const_generics, unsafe_block_in_unsafe_fn)
 )]
-#![forbid(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(
+    feature = "nightly",
+    feature(
+        trusted_len,
+        min_specialization,
+        exact_size_is_empty,
+        allocator_api,
+        alloc_layout_extra
+    )
+)]
+#![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
+#![allow(unused_unsafe)]
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
 
 #[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
 use std::boxed::Box;
 
+#[cfg(feature = "nightly")]
+use core::convert::TryFrom;
+
 use core::{
-    convert::TryFrom,
     marker::PhantomData,
     mem,
     ops::{Deref, DerefMut},
@@ -32,12 +42,21 @@ pub mod raw;
 
 use raw::RawVec;
 
-pub type ArrayVec<T, const N: usize> = GenericVec<raw::UninitArray<T, N>>;
-pub type SliceVec<T> = GenericVec<raw::UninitSlice<T>>;
 #[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
 pub type Vec<T, A = std::alloc::Global> = GenericVec<raw::Heap<T, A>>;
+#[cfg(feature = "alloc")]
+#[cfg(not(feature = "nightly"))]
+pub type Vec<T> = GenericVec<raw::Heap<T>>;
 
+#[cfg(feature = "nightly")]
+pub type ArrayVec<T, const N: usize> = GenericVec<raw::UninitArray<T, N>>;
+#[cfg(feature = "nightly")]
+pub type SliceVec<T> = GenericVec<raw::UninitSlice<T>>;
+
+#[cfg(feature = "nightly")]
 pub type InitArrayVec<T, const N: usize> = GenericVec<raw::Array<T, N>>;
+#[cfg(feature = "nightly")]
 pub type InitSliceVec<T> = GenericVec<raw::Slice<T>>;
 
 use iter::{Drain, DrainFilter, RawDrain, Splice};
@@ -69,6 +88,7 @@ impl<A: ?Sized + RawVec> Drop for GenericVec<A> {
     }
 }
 
+#[cfg(feature = "nightly")]
 impl<T, const N: usize> ArrayVec<T, N> {
     pub const fn new() -> Self {
         Self {
@@ -91,6 +111,7 @@ impl<T> Vec<T> {
 }
 
 #[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
 impl<T, A: std::alloc::AllocRef> Vec<T, A> {
     pub fn with_alloc(alloc: A) -> Self {
         Self {
@@ -102,6 +123,7 @@ impl<T, A: std::alloc::AllocRef> Vec<T, A> {
 }
 
 #[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
 impl<'a, T, const N: usize> TryFrom<Box<SliceVec<T>>> for Box<ArrayVec<T, N>> {
     type Error = Box<SliceVec<T>>;
 
@@ -114,6 +136,7 @@ impl<'a, T, const N: usize> TryFrom<Box<SliceVec<T>>> for Box<ArrayVec<T, N>> {
     }
 }
 
+#[cfg(feature = "nightly")]
 impl<'a, T, const N: usize> TryFrom<&'a mut SliceVec<T>> for &'a mut ArrayVec<T, N> {
     type Error = &'a mut SliceVec<T>;
 
@@ -126,6 +149,7 @@ impl<'a, T, const N: usize> TryFrom<&'a mut SliceVec<T>> for &'a mut ArrayVec<T,
     }
 }
 
+#[cfg(feature = "nightly")]
 impl<'a, T, const N: usize> TryFrom<&'a SliceVec<T>> for &'a ArrayVec<T, N> {
     type Error = &'a SliceVec<T>;
 
@@ -138,7 +162,17 @@ impl<'a, T, const N: usize> TryFrom<&'a SliceVec<T>> for &'a ArrayVec<T, N> {
     }
 }
 
-// TODO: insert, remove, swap_remove, split_off
+// TODO: insert, remove, swap_remove, split_off, docs
+
+impl<A: raw::RawVecInit> GenericVec<A> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            len: 0,
+            raw: A::with_capacity(capacity),
+            mark: PhantomData,
+        }
+    }
+}
 
 impl<A: ?Sized + RawVec> GenericVec<A> {
     pub fn as_ptr(&self) -> *const A::Item {
@@ -183,6 +217,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), core::alloc::AllocError> {
         if let Some(new_capacity) = self.len.checked_add(additional) {
             self.raw.try_reserve(new_capacity)

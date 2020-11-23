@@ -13,6 +13,8 @@ impl<'a, A: ?Sized + RawVec> From<RawDrain<'a, A>> for Drain<'a, A> {
 }
 
 impl<A: ?Sized + RawVec> FusedIterator for Drain<'_, A> {}
+
+#[cfg(feature = "nightly")]
 impl<A: ?Sized + RawVec> ExactSizeIterator for Drain<'_, A> {
     fn is_empty(&self) -> bool {
         self.raw.is_complete()

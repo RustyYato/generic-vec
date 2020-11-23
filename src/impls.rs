@@ -1,19 +1,31 @@
-use crate::{GenericVec, RawVec};
+use crate::{raw::RawVecInit, GenericVec, RawVec};
 
 use core::borrow::{Borrow, BorrowMut};
 use core::hash::{Hash, Hasher};
 
-impl<A: RawVec> Clone for GenericVec<A>
+impl<A: RawVecInit> Clone for GenericVec<A>
 where
     A::Item: Clone,
 {
     fn clone(&self) -> Self {
-        todo!()
+        let mut vec = Self::with_capacity(self.len());
+        vec.extend_from_slice(self);
+        vec
     }
 
     fn clone_from(&mut self, source: &Self) {
         self.clear();
         self.extend_from_slice(source);
+    }
+}
+
+impl<A: crate::raw::RawVecInit> Default for GenericVec<A> {
+    fn default() -> Self {
+        Self {
+            len: 0,
+            mark: Default::default(),
+            raw: Default::default(),
+        }
     }
 }
 
