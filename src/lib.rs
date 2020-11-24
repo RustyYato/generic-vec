@@ -288,25 +288,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { self.push_unchecked(value) }
     }
 
-    pub fn try_push(&mut self, value: A::Item) -> Result<&mut A::Item, A::Item> {
-        if self.len() == self.capacity() {
-            Err(value)
-        } else {
-            unsafe { Ok(self.push_unchecked(value)) }
-        }
-    }
-
-    pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
-        unsafe {
-            let len = self.len();
-            let ptr = self.raw.as_mut_ptr().add(index);
-            ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
-            ptr.write(value);
-            &mut *ptr
-        }
-    }
-
-    pub unsafe fn insert(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+    pub fn insert(&mut self, index: usize, value: A::Item) -> &mut A::Item {
         if self.len() == self.capacity() {
             self.reserve(1);
         }
@@ -314,30 +296,14 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { self.insert_unchecked(index, value) }
     }
 
-    pub fn try_insert(&mut self, index: usize, value: A::Item) -> Result<&mut A::Item, A::Item> {
-        if self.len() == self.capacity() {
-            Err(value)
-        } else {
-            unsafe { Ok(self.insert_unchecked(index, value)) }
-        }
-    }
+    pub fn pop(&mut self) -> A::Item {
+        assert_ne!(
+            self.len(),
+            0,
+            "Tried to pop an element from an empty vector",
+        );
 
-    pub fn pop(&mut self) -> Option<A::Item> {
-        if self.len() == 0 {
-            None
-        } else {
-            unsafe { Some(self.pop_unchecked()) }
-        }
-    }
-
-    pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
-        unsafe {
-            let len = self.len();
-            let ptr = self.raw.as_mut_ptr();
-            let value = ptr::read(self.get_unchecked(index));
-            ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
-            value
-        }
+        unsafe { self.pop_unchecked() }
     }
 
     pub fn remove(&mut self, index: usize) -> A::Item {
@@ -351,26 +317,6 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { self.remove_unchecked(index) }
     }
 
-    pub fn try_remove(&mut self, index: usize) -> Option<A::Item> {
-        if self.len() < index {
-            unsafe { Some(self.remove_unchecked(index)) }
-        } else {
-            None
-        }
-    }
-
-    pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
-        unsafe {
-            let len = self.len();
-            let ptr = self.raw.as_mut_ptr();
-            let at = ptr.add(index);
-            let end = ptr.add(len.wrapping_sub(1));
-            let value = at.read();
-            at.copy_from(end, 1);
-            value
-        }
-    }
-
     pub fn swap_remove(&mut self, index: usize) -> A::Item {
         assert!(
             index < self.len(),
@@ -380,6 +326,38 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         );
 
         unsafe { self.swap_remove_unchecked(index) }
+    }
+
+    pub fn try_push(&mut self, value: A::Item) -> Result<&mut A::Item, A::Item> {
+        if self.len() == self.capacity() {
+            Err(value)
+        } else {
+            unsafe { Ok(self.push_unchecked(value)) }
+        }
+    }
+
+    pub fn try_insert(&mut self, index: usize, value: A::Item) -> Result<&mut A::Item, A::Item> {
+        if self.len() == self.capacity() {
+            Err(value)
+        } else {
+            unsafe { Ok(self.insert_unchecked(index, value)) }
+        }
+    }
+
+    pub fn try_pop(&mut self) -> Option<A::Item> {
+        if self.len() == 0 {
+            None
+        } else {
+            unsafe { Some(self.pop_unchecked()) }
+        }
+    }
+
+    pub fn try_remove(&mut self, index: usize) -> Option<A::Item> {
+        if self.len() < index {
+            unsafe { Some(self.remove_unchecked(index)) }
+        } else {
+            None
+        }
     }
 
     pub fn try_swap_remove(&mut self, index: usize) -> Option<A::Item> {
@@ -405,6 +383,16 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+        unsafe {
+            let len = self.len();
+            let ptr = self.raw.as_mut_ptr().add(index);
+            ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
+            ptr.write(value);
+            &mut *ptr
+        }
+    }
+
     pub unsafe fn pop_unchecked(&mut self) -> A::Item {
         let len = self.len();
         debug_assert_ne!(
@@ -415,6 +403,28 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             let len = len.wrapping_sub(1);
             self.set_len_unchecked(len);
             self.as_mut_ptr().add(len).read()
+        }
+    }
+
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
+        unsafe {
+            let len = self.len();
+            let ptr = self.raw.as_mut_ptr();
+            let value = ptr::read(self.get_unchecked(index));
+            ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
+            value
+        }
+    }
+
+    pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
+        unsafe {
+            let len = self.len();
+            let ptr = self.raw.as_mut_ptr();
+            let at = ptr.add(index);
+            let end = ptr.add(len.wrapping_sub(1));
+            let value = at.read();
+            at.copy_from(end, 1);
+            value
         }
     }
 
@@ -449,7 +459,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         self.split_off(0)
     }
 
-    pub fn consume<B: raw::RawVec<Item = A::Item>>(&mut self, other: &mut GenericVec<B>) {
+    pub fn consume_extend<B: raw::RawVec<Item = A::Item>>(&mut self, other: &mut GenericVec<B>) {
         unsafe {
             self.reserve(other.len());
             self.extend_from_slice_unchecked(other);
