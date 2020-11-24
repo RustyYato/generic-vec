@@ -288,12 +288,48 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { self.push_unchecked(value) }
     }
 
+    #[cfg(feature = "nightly")]
+    pub fn push_array<const N: usize>(&mut self, value: [A::Item; N]) -> &mut [A::Item; N] {
+        if self.capacity().wrapping_sub(self.len()) < N {
+            self.reserve(N);
+        }
+
+        unsafe { self.push_array_unchecked(value) }
+    }
+
     pub fn insert(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+        assert!(
+            index <= self.len(),
+            "Tried to insert at {}, but length is {}",
+            index,
+            self.len(),
+        );
+
         if self.len() == self.capacity() {
             self.reserve(1);
         }
 
         unsafe { self.insert_unchecked(index, value) }
+    }
+
+    #[cfg(feature = "nightly")]
+    pub fn insert_array<const N: usize>(
+        &mut self,
+        index: usize,
+        value: [A::Item; N],
+    ) -> &mut [A::Item; N] {
+        assert!(
+            index <= self.len(),
+            "Tried to insert at {}, but length is {}",
+            index,
+            self.len(),
+        );
+
+        if self.capacity().wrapping_sub(self.len()) < N {
+            self.reserve(N);
+        }
+
+        unsafe { self.insert_array_unchecked(index, value) }
     }
 
     pub fn pop(&mut self) -> A::Item {
@@ -306,6 +342,19 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { self.pop_unchecked() }
     }
 
+    #[cfg(feature = "nightly")]
+    pub fn pop_array<const N: usize>(&mut self) -> [A::Item; N] {
+        assert_ne!(
+            self.len(),
+            0,
+            "Tried to pop {} elements, but length is {}",
+            N,
+            self.len()
+        );
+
+        unsafe { self.pop_array_unchecked() }
+    }
+
     pub fn remove(&mut self, index: usize) -> A::Item {
         assert!(
             index < self.len(),
@@ -315,6 +364,19 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         );
 
         unsafe { self.remove_unchecked(index) }
+    }
+
+    #[cfg(feature = "nightly")]
+    pub fn remove_array<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
+        assert!(
+            self.len() < index || self.len().wrapping_sub(index) < N,
+            "Tried to remove {} elements at index {}, but length is {}",
+            N,
+            index,
+            self.len()
+        );
+
+        unsafe { self.remove_array_unchecked(index) }
     }
 
     pub fn swap_remove(&mut self, index: usize) -> A::Item {
@@ -336,11 +398,36 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub fn try_push_array<const N: usize>(
+        &mut self,
+        value: [A::Item; N],
+    ) -> Result<&mut [A::Item; N], [A::Item; N]> {
+        if self.capacity().wrapping_sub(self.len()) < N {
+            Err(value)
+        } else {
+            unsafe { Ok(self.push_array_unchecked(value)) }
+        }
+    }
+
     pub fn try_insert(&mut self, index: usize, value: A::Item) -> Result<&mut A::Item, A::Item> {
-        if self.len() == self.capacity() {
+        if self.len() == self.capacity() || index > self.len() {
             Err(value)
         } else {
             unsafe { Ok(self.insert_unchecked(index, value)) }
+        }
+    }
+
+    #[cfg(feature = "nightly")]
+    pub fn try_insert_array<const N: usize>(
+        &mut self,
+        index: usize,
+        value: [A::Item; N],
+    ) -> Result<&mut [A::Item; N], [A::Item; N]> {
+        if self.capacity().wrapping_sub(self.len()) < N || index > self.len() {
+            Err(value)
+        } else {
+            unsafe { Ok(self.insert_array_unchecked(index, value)) }
         }
     }
 
@@ -352,9 +439,27 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub fn try_pop_array<const N: usize>(&mut self) -> Option<[A::Item; N]> {
+        if self.len() == 0 {
+            None
+        } else {
+            unsafe { Some(self.pop_array_unchecked()) }
+        }
+    }
+
     pub fn try_remove(&mut self, index: usize) -> Option<A::Item> {
         if self.len() < index {
+            None
+        } else {
             unsafe { Some(self.remove_unchecked(index)) }
+        }
+    }
+
+    #[cfg(feature = "nightly")]
+    pub fn try_remove_array<const N: usize>(&mut self, index: usize) -> Option<[A::Item; N]> {
+        if self.len() < index || self.len().wrapping_sub(index) < N {
+            unsafe { Some(self.remove_array_unchecked(index)) }
         } else {
             None
         }
@@ -369,6 +474,11 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     pub unsafe fn push_unchecked(&mut self, value: A::Item) -> &mut A::Item {
+        match A::CONST_CAPACITY {
+            Some(0) => panic!("Tried to push an element into a zero-capacity vector!"),
+            _ => (),
+        }
+
         debug_assert_ne!(
             self.len(),
             self.capacity(),
@@ -383,8 +493,35 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub unsafe fn push_array_unchecked<const N: usize>(
+        &mut self,
+        value: [A::Item; N],
+    ) -> &mut [A::Item; N] {
+        match A::CONST_CAPACITY {
+            Some(n) if n < N => {
+                panic!("Tried to push an array larger than the maximum capacity of the vector!")
+            }
+            _ => (),
+        }
+
+        unsafe {
+            let len = self.len();
+            self.set_len_unchecked(len.wrapping_add(N));
+            let ptr = self.as_mut_ptr();
+            let out = ptr.add(len) as *mut [A::Item; N];
+            out.write(value);
+            &mut *out
+        }
+    }
+
     pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
         unsafe {
+            match A::CONST_CAPACITY {
+                Some(0) => panic!("Tried to insert an element into a zero-capacity vector!"),
+                _ => (),
+            }
+
             let len = self.len();
             let ptr = self.raw.as_mut_ptr().add(index);
             ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
@@ -393,7 +530,39 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub unsafe fn insert_array_unchecked<const N: usize>(
+        &mut self,
+        index: usize,
+        value: [A::Item; N],
+    ) -> &mut [A::Item; N] {
+        match A::CONST_CAPACITY {
+            Some(n) if n < N => {
+                panic!("Tried to push an array larger than the maximum capacity of the vector!")
+            }
+            _ => (),
+        }
+
+        unsafe {
+            let len = self.len();
+            self.set_len_unchecked(len.wrapping_add(N));
+            let ptr = self.as_mut_ptr();
+            let dist = len.wrapping_sub(index);
+
+            let out = ptr.add(index);
+            out.add(N).copy_from(out, dist);
+            let out = out as *mut [A::Item; N];
+            out.write(value);
+            &mut *out
+        }
+    }
+
     pub unsafe fn pop_unchecked(&mut self) -> A::Item {
+        match A::CONST_CAPACITY {
+            Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
+            _ => (),
+        }
+
         let len = self.len();
         debug_assert_ne!(
             len, 0,
@@ -406,9 +575,46 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub unsafe fn pop_array_unchecked<const N: usize>(&mut self) -> [A::Item; N] {
+        match A::CONST_CAPACITY {
+            Some(n) if n < N => panic!(
+                "Tried to remove {} elements from a {} capacity vector!",
+                N, n
+            ),
+            _ => (),
+        }
+
+        let len = self.len();
+        debug_assert!(
+            len > N,
+            "Tried to remove {} elements from a {} length vector! This is UB in release mode",
+            N,
+            len,
+        );
+        unsafe {
+            let len = len.wrapping_sub(N);
+            self.set_len_unchecked(len);
+            self.as_mut_ptr().add(len).cast::<[A::Item; N]>().read()
+        }
+    }
+
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
+            match A::CONST_CAPACITY {
+                Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
+                _ => (),
+            }
+
             let len = self.len();
+
+            debug_assert!(
+                index <= len,
+                "Tried to remove an element at index {} from a {} length vector! This is UB in release mode",
+                index,
+                len,
+            );
+
             let ptr = self.raw.as_mut_ptr();
             let value = ptr::read(self.get_unchecked(index));
             ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
@@ -416,8 +622,47 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    #[cfg(feature = "nightly")]
+    pub unsafe fn remove_array_unchecked<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
+        match A::CONST_CAPACITY {
+            Some(n) if n < N => panic!(
+                "Tried to remove {} elements from a {} capacity vector!",
+                N, n
+            ),
+            _ => (),
+        }
+
+        let len = self.len();
+        debug_assert!(
+            index <= len,
+            "Tried to remove elements at index {} from a {} length vector! This is UB in release mode",
+            index,
+            len,
+        );
+        debug_assert!(
+            len.wrapping_sub(index) > N,
+            "Tried to remove {} elements from a {} length vector! This is UB in release mode",
+            N,
+            len,
+        );
+        unsafe {
+            self.set_len_unchecked(len.wrapping_sub(N));
+            let ptr = self.as_mut_ptr().add(index);
+            let value = ptr.cast::<[A::Item; N]>().read();
+            if N != 0 {
+                ptr.copy_from(ptr.add(N), len.wrapping_sub(index).wrapping_sub(N));
+            }
+            value
+        }
+    }
+
     pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
+            match A::CONST_CAPACITY {
+                Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
+                _ => (),
+            }
+
             let len = self.len();
             let ptr = self.raw.as_mut_ptr();
             let at = ptr.add(index);
