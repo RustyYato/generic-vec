@@ -100,3 +100,10 @@ impl<A: ?Sized + RawVec> BorrowMut<[A::Item]> for GenericVec<A> {
         self
     }
 }
+
+#[cfg(feature = "nightly")]
+impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
+    fn from(array: [T; N]) -> Self {
+        ArrayVec::<T, N>::with_raw(unsafe { core::mem::transmute(array) })
+    }
+}

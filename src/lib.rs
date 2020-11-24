@@ -19,10 +19,6 @@
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
 
-#[cfg(feature = "alloc")]
-#[cfg(feature = "nightly")]
-use std::boxed::Box;
-
 use core::{
     marker::PhantomData,
     mem::{self, MaybeUninit},
@@ -83,6 +79,35 @@ impl<A: ?Sized + RawVec> Drop for GenericVec<A> {
     }
 }
 
+impl<A: RawVec> GenericVec<A> {
+    pub fn with_raw(raw: A) -> Self {
+        Self {
+            raw,
+            len: 0,
+            mark: PhantomData,
+        }
+    }
+}
+
+impl<A: raw::RawVecInit> GenericVec<A> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_raw(A::with_capacity(capacity))
+    }
+
+    #[inline]
+    #[allow(non_snake_case)]
+    fn __with_capacity__const_capacity_checked(
+        capacity: usize,
+        old_capacity: Option<usize>,
+    ) -> Self {
+        Self {
+            len: 0,
+            raw: A::__with_capacity__const_capacity_checked(capacity, old_capacity),
+            mark: PhantomData,
+        }
+    }
+}
+
 #[cfg(feature = "nightly")]
 impl<T, const N: usize> ArrayVec<T, N> {
     pub const fn new() -> Self {
@@ -122,35 +147,6 @@ impl<'a, T> SliceVec<'a, T> {
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     pub fn new(slice: &'a mut [T]) -> Self {
         Self::with_raw(raw::Init(slice))
-    }
-}
-
-impl<A: raw::RawVecInit> GenericVec<A> {
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_raw(A::with_capacity(capacity))
-    }
-
-    #[inline]
-    #[allow(non_snake_case)]
-    fn __with_capacity__const_capacity_checked(
-        capacity: usize,
-        old_capacity: Option<usize>,
-    ) -> Self {
-        Self {
-            len: 0,
-            raw: A::__with_capacity__const_capacity_checked(capacity, old_capacity),
-            mark: PhantomData,
-        }
-    }
-}
-
-impl<A: RawVec> GenericVec<A> {
-    pub fn with_raw(raw: A) -> Self {
-        Self {
-            raw,
-            len: 0,
-            mark: PhantomData,
-        }
     }
 }
 
