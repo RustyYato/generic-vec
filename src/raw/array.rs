@@ -1,19 +1,17 @@
-use crate::raw::{RawVec, RawVecInit};
+use crate::raw::{Init, RawVec, RawVecInit, Uninit};
 use core::{alloc::AllocError, mem::MaybeUninit};
 
-#[repr(transparent)]
-pub struct Uninit<T: ?Sized>(T);
-
 pub type UninitArray<T, const N: usize> = Uninit<[MaybeUninit<T>; N]>;
-pub type UninitSlice<T> = Uninit<[MaybeUninit<T>]>;
 
-impl<T> ConstUninit for T {}
-trait ConstUninit: Sized {
-    const UNINIT: MaybeUninit<Self> = MaybeUninit::uninit();
-}
+pub type Array<T, const N: usize> = Init<[T; N]>;
 
 impl<T, const N: usize> UninitArray<T, N> {
     pub const fn uninit() -> Self {
+        impl<T> ConstUninit for T {}
+        trait ConstUninit: Sized {
+            const UNINIT: MaybeUninit<Self> = MaybeUninit::uninit();
+        }
+
         Uninit([ConstUninit::UNINIT; N])
     }
 }
@@ -24,9 +22,22 @@ impl<T, const N: usize> Default for UninitArray<T, N> {
     }
 }
 
+impl<T: Default + Copy, const N: usize> Default for Array<T, N> {
+    fn default() -> Self {
+        Self([T::default(); N])
+    }
+}
+
 impl<T, const N: usize> Clone for UninitArray<T, N> {
     fn clone(&self) -> Self {
         Self::uninit()
+    }
+}
+
+impl<T: Copy, const N: usize> Copy for Array<T, N> {}
+impl<T: Copy, const N: usize> Clone for Array<T, N> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
@@ -60,7 +71,7 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     fn reserve(&mut self, capacity: usize) {
         assert!(
             capacity <= N,
-            "Cannot allocate more space when using an Array RawVec"
+            "Cannot allocate more space when using an array-backed RawVec"
         )
     }
 
@@ -73,11 +84,23 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     }
 }
 
-unsafe impl<T> RawVec for UninitSlice<T> {
+impl<T: Default + Copy, const N: usize> RawVecInit for Array<T, N> {
+    fn with_capacity(capacity: usize) -> Self {
+        assert!(
+            capacity <= N,
+            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> RawVec",
+            N,
+        );
+
+        Self::default()
+    }
+}
+
+unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
     type Item = T;
 
     fn capacity(&self) -> usize {
-        self.0.len()
+        N
     }
 
     fn as_ptr(&self) -> *const Self::Item {
@@ -90,13 +113,13 @@ unsafe impl<T> RawVec for UninitSlice<T> {
 
     fn reserve(&mut self, capacity: usize) {
         assert!(
-            capacity <= self.0.len(),
-            "Cannot allocate more space when using an Array RawVec"
+            capacity <= N,
+            "Cannot allocate more space when using an array-backed RawVec"
         )
     }
 
     fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {
-        if capacity <= self.capacity() {
+        if capacity <= N {
             Ok(())
         } else {
             Err(AllocError)

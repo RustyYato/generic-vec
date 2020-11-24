@@ -23,9 +23,6 @@ extern crate alloc as std;
 #[cfg(feature = "nightly")]
 use std::boxed::Box;
 
-#[cfg(feature = "nightly")]
-use core::convert::TryFrom;
-
 use core::{
     marker::PhantomData,
     mem,
@@ -51,13 +48,11 @@ pub type Vec<T> = GenericVec<raw::Heap<T>>;
 
 #[cfg(feature = "nightly")]
 pub type ArrayVec<T, const N: usize> = GenericVec<raw::UninitArray<T, N>>;
-#[cfg(feature = "nightly")]
-pub type SliceVec<T> = GenericVec<raw::UninitSlice<T>>;
+pub type SliceVec<'a, T> = GenericVec<raw::UninitSlice<'a, T>>;
 
 #[cfg(feature = "nightly")]
 pub type InitArrayVec<T, const N: usize> = GenericVec<raw::Array<T, N>>;
-#[cfg(feature = "nightly")]
-pub type InitSliceVec<T> = GenericVec<raw::Slice<T>>;
+pub type InitSliceVec<'a, T> = GenericVec<raw::Slice<'a, T>>;
 
 use iter::{Drain, DrainFilter, RawDrain, Splice};
 
@@ -118,46 +113,6 @@ impl<T, A: std::alloc::AllocRef> Vec<T, A> {
             len: 0,
             mark: PhantomData,
             raw: raw::Heap::with_alloc(alloc),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-#[cfg(feature = "nightly")]
-impl<'a, T, const N: usize> TryFrom<Box<SliceVec<T>>> for Box<ArrayVec<T, N>> {
-    type Error = Box<SliceVec<T>>;
-
-    fn try_from(vec: Box<SliceVec<T>>) -> Result<Self, Self::Error> {
-        if vec.raw.capacity() == N {
-            Ok(unsafe { Box::from_raw(Box::into_raw(vec) as *mut ArrayVec<T, N>) })
-        } else {
-            Err(vec)
-        }
-    }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, T, const N: usize> TryFrom<&'a mut SliceVec<T>> for &'a mut ArrayVec<T, N> {
-    type Error = &'a mut SliceVec<T>;
-
-    fn try_from(vec: &'a mut SliceVec<T>) -> Result<Self, Self::Error> {
-        if vec.raw.capacity() == N {
-            Ok(unsafe { &mut *(vec as *mut SliceVec<T> as *mut ArrayVec<T, N>) })
-        } else {
-            Err(vec)
-        }
-    }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, T, const N: usize> TryFrom<&'a SliceVec<T>> for &'a ArrayVec<T, N> {
-    type Error = &'a SliceVec<T>;
-
-    fn try_from(vec: &'a SliceVec<T>) -> Result<Self, Self::Error> {
-        if vec.raw.capacity() == N {
-            Ok(unsafe { &*(vec as *const SliceVec<T> as *const ArrayVec<T, N>) })
-        } else {
-            Err(vec)
         }
     }
 }
