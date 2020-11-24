@@ -2,6 +2,8 @@ use crate::{raw::RawVecWithCapacity, GenericVec, RawVec};
 
 use core::borrow::{Borrow, BorrowMut};
 use core::hash::{Hash, Hasher};
+use core::ops::{Index, IndexMut};
+use core::slice::SliceIndex;
 
 impl<A: RawVecWithCapacity> Clone for GenericVec<A>
 where
@@ -112,5 +114,25 @@ impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
 impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
     fn from(array: [T; N]) -> Self {
         crate::InitArrayVec::<T, N>::new(array)
+    }
+}
+
+impl<A: RawVec + ?Sized, I> Index<I> for GenericVec<A>
+where
+    I: SliceIndex<[A::Item]>,
+{
+    type Output = I::Output;
+
+    fn index(&self, index: I) -> &Self::Output {
+        self.as_slice().index(index)
+    }
+}
+
+impl<A: RawVec + ?Sized, I> IndexMut<I> for GenericVec<A>
+where
+    I: SliceIndex<[A::Item]>,
+{
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.as_mut_slice().index_mut(index)
     }
 }
