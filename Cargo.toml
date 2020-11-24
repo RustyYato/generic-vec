@@ -15,3 +15,7 @@ alloc = []
 nightly = []
 
 [dependencies]
+
+[dev-dependencies]
+mockalloc = '0.1'
+static-alloc = '0.2'
