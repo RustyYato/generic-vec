@@ -91,7 +91,7 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     fn reserve(&mut self, capacity: usize) {
         assert!(
             capacity <= N,
-            "Cannot allocate more space when using an array-backed RawVec"
+            "Cannot allocate more space when using an array-backed vector"
         )
     }
 
@@ -151,7 +151,7 @@ unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
     fn reserve(&mut self, capacity: usize) {
         assert!(
             capacity <= N,
-            "Cannot allocate more space when using an array-backed RawVec"
+            "Cannot allocate more space when using an array-backed vector"
         )
     }
 

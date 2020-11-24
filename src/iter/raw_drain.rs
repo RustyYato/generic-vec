@@ -162,4 +162,51 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
             }
         }
     }
+
+    pub unsafe fn consume_write_slice_front(&mut self, slice: &[A::Item]) {
+        unsafe {
+            self.write_front
+                .copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+            self.write_front = self.write_front.add(slice.len());
+        }
+    }
+
+    pub fn assert_space(&mut self, space: usize) {
+        unsafe {
+            let write_space = self.write_back.offset_from(self.write_front) as usize;
+
+            if write_space >= space {
+                return;
+            }
+
+            let start = (*self.vec).as_mut_ptr();
+            let capacity = (*self.vec).capacity();
+            let range = start..start.add(self.old_vec_len);
+
+            let front_len = self.write_front.offset_from(range.start) as usize;
+            let back_len = range.end.offset_from(self.write_back) as usize;
+            let len = front_len + back_len;
+
+            if len + space > capacity {
+                let wf = self.write_front.offset_from(range.start) as usize;
+                let wb = self.write_back.offset_from(range.start) as usize;
+                let rf = self.read_front.offset_from(range.start) as usize;
+                let rb = self.read_back.offset_from(range.start) as usize;
+
+                let vec = &mut *self.vec;
+                vec.raw.reserve(len + space);
+
+                let start = vec.as_mut_ptr();
+                self.write_front = start.add(wf);
+                self.write_back = start.add(wb);
+                self.read_front = start.add(rf);
+                self.read_back = start.add(rb);
+            }
+
+            let new_write_back = self.write_back.add(space.wrapping_sub(write_space));
+            new_write_back.copy_from(self.write_back, back_len);
+            self.write_back = new_write_back;
+            self.old_vec_len += space;
+        }
+    }
 }

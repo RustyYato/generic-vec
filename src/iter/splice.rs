@@ -19,6 +19,27 @@ impl<'a, A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Splice<'a, A, I> {
 impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> {
     fn drop(&mut self) {
         self.for_each(drop);
+
+        #[cfg(not(feature = "alloc"))]
+        {
+            for _ in self.replace_with.by_ref() {
+                panic!(
+                    "Tried to splice in an iterator larger than the given range! \
+                        This requires an allocator to work."
+                );
+            }
+        }
+
+        #[cfg(feature = "alloc")]
+        {
+            let mut temp: std::vec::Vec<_> = self.replace_with.by_ref().collect();
+
+            unsafe {
+                self.raw.assert_space(temp.len());
+                self.raw.consume_write_slice_front(&temp);
+                temp.set_len(0);
+            }
+        }
     }
 }
 

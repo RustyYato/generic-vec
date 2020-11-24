@@ -24,7 +24,7 @@ unsafe impl<T> RawVec for UninitSlice<'_, T> {
     fn reserve(&mut self, capacity: usize) {
         assert!(
             capacity <= self.0.len(),
-            "Cannot allocate more space when using an slice-backed RawVec"
+            "Cannot allocate more space when using an slice-backed vector"
         )
     }
 
@@ -57,7 +57,7 @@ unsafe impl<T: Copy> RawVec for Slice<'_, T> {
     fn reserve(&mut self, capacity: usize) {
         assert!(
             capacity <= self.0.len(),
-            "Cannot allocate more space when using an slice-backed RawVec"
+            "Cannot allocate more space when using an slice-backed vector"
         )
     }
 

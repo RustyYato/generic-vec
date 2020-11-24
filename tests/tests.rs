@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -86,7 +86,7 @@ mod heap_vec {
 mod init_slice_vec {
     macro_rules! new_vec {
         ($vec:pat, max($len:expr)) => {
-            let mut buf = [Default::default(); $len * 2];
+            let mut buf = [Default::default(); $len];
             let mut vec = generic_vec::InitSliceVec::new(&mut buf);
             vec.set_len(0);
             let $vec = vec;
