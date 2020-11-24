@@ -21,7 +21,7 @@ extern crate alloc as std;
 
 use core::{
     marker::PhantomData,
-    mem::{self, MaybeUninit},
+    mem::MaybeUninit,
     ops::{Deref, DerefMut},
     ptr,
 };
@@ -51,6 +51,29 @@ pub type InitArrayVec<T, const N: usize> = GenericVec<raw::Array<T, N>>;
 pub type InitSliceVec<'a, T> = GenericVec<raw::Slice<'a, T>>;
 
 use iter::{Drain, DrainFilter, RawDrain, Splice};
+
+#[doc(hidden)]
+pub mod macros {
+    pub use core::mem::MaybeUninit;
+    impl<T> Uninit for T {}
+    pub trait Uninit: Sized {
+        const UNINIT: MaybeUninit<Self> = MaybeUninit::uninit();
+    }
+}
+
+#[macro_export]
+macro_rules! uninit_array {
+    (const $n:expr) => {
+        [$crate::macros::Uninit::UNINIT; $n]
+    };
+
+    ($n:expr) => {
+        unsafe {
+            $crate::macros::MaybeUninit::<[$crate::macros::MaybeUninit<_>; $n]>::uninit()
+                .assume_init()
+        }
+    };
+}
 
 #[repr(C)]
 pub struct GenericVec<A: ?Sized + RawVec> {
@@ -89,7 +112,7 @@ impl<A: RawVec> GenericVec<A> {
     }
 }
 
-impl<A: raw::RawVecInit> GenericVec<A> {
+impl<A: raw::RawVecWithCapacity> GenericVec<A> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self::with_raw(A::with_capacity(capacity))
     }
@@ -115,6 +138,17 @@ impl<T, const N: usize> ArrayVec<T, N> {
             len: 0,
             mark: PhantomData,
             raw: raw::UninitArray::uninit(),
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T: Copy, const N: usize> InitArrayVec<T, N> {
+    pub fn new(array: [T; N]) -> Self {
+        Self {
+            len: N,
+            mark: PhantomData,
+            raw: raw::Array::new(array),
         }
     }
 }
@@ -167,8 +201,15 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         self.len = len;
     }
 
+    pub fn set_len(&mut self, len: usize)
+    where
+        A: raw::RawVecInit,
+    {
+        self.len = len;
+    }
+
     pub fn capacity(&self) -> usize {
-        mem::size_of_val(&self.raw) / mem::size_of::<A::Item>()
+        self.raw.capacity()
     }
 
     pub fn as_slice(&self) -> &[A::Item] {
@@ -185,6 +226,16 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn raw_buffer_mut(&mut self) -> &mut A {
         &mut self.raw
+    }
+
+    pub fn remaining(&mut self) -> &mut [A::BufferItem] {
+        unsafe {
+            let cap = self.raw.capacity();
+            core::slice::from_raw_parts_mut(
+                self.raw.as_mut_ptr().add(self.len).cast(),
+                cap.wrapping_sub(self.len),
+            )
+        }
     }
 
     pub fn reserve(&mut self, additional: usize) {
@@ -356,7 +407,10 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    pub fn split_off<B: raw::RawVecInit<Item = A::Item>>(&mut self, index: usize) -> GenericVec<B> {
+    pub fn split_off<B: raw::RawVecWithCapacity<Item = A::Item>>(
+        &mut self,
+        index: usize,
+    ) -> GenericVec<B> {
         assert!(
             index <= self.len,
             "Tried to split at index {}, but length is {}",
@@ -377,7 +431,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         vec
     }
 
-    pub fn convert<B: raw::RawVecInit<Item = A::Item>>(mut self) -> GenericVec<B>
+    pub fn convert<B: raw::RawVecWithCapacity<Item = A::Item>>(mut self) -> GenericVec<B>
     where
         A: Sized,
     {

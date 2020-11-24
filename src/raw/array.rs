@@ -1,24 +1,28 @@
-use crate::raw::{Init, RawVec, RawVecInit, Uninit};
+use crate::raw::{Init, RawVec, RawVecWithCapacity, Uninit};
 use core::{alloc::AllocError, mem::MaybeUninit};
 
-pub type UninitArray<T, const N: usize> = Uninit<[MaybeUninit<T>; N]>;
-
+pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
 pub type Array<T, const N: usize> = Init<[T; N]>;
 
 impl<T, const N: usize> UninitArray<T, N> {
     pub const fn uninit() -> Self {
-        impl<T> ConstUninit for T {}
-        trait ConstUninit: Sized {
-            const UNINIT: MaybeUninit<Self> = MaybeUninit::uninit();
-        }
+        Self(MaybeUninit::uninit())
+    }
 
-        Uninit([ConstUninit::UNINIT; N])
+    pub const fn new(array: [T; N]) -> Self {
+        Self(MaybeUninit::new(array))
+    }
+}
+
+impl<T, const N: usize> Array<T, N> {
+    pub const fn new(array: [T; N]) -> Self {
+        Self(array)
     }
 }
 
 impl<T, const N: usize> Default for UninitArray<T, N> {
     fn default() -> Self {
-        unsafe { MaybeUninit::uninit().assume_init() }
+        Self::uninit()
     }
 }
 
@@ -41,7 +45,7 @@ impl<T: Copy, const N: usize> Clone for Array<T, N> {
     }
 }
 
-impl<T, const N: usize> RawVecInit for UninitArray<T, N> {
+impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
@@ -70,6 +74,7 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;
+    type BufferItem = MaybeUninit<T>;
 
     fn capacity(&self) -> usize {
         N
@@ -99,7 +104,8 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     }
 }
 
-impl<T: Default + Copy, const N: usize> RawVecInit for Array<T, N> {
+unsafe impl<T: Copy, const N: usize> crate::raw::RawVecInit for Array<T, N> {}
+impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
@@ -128,6 +134,7 @@ unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;
+    type BufferItem = T;
 
     fn capacity(&self) -> usize {
         N

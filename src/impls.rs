@@ -1,9 +1,9 @@
-use crate::{raw::RawVecInit, GenericVec, RawVec};
+use crate::{raw::RawVecWithCapacity, GenericVec, RawVec};
 
 use core::borrow::{Borrow, BorrowMut};
 use core::hash::{Hash, Hasher};
 
-impl<A: RawVecInit> Clone for GenericVec<A>
+impl<A: RawVecWithCapacity> Clone for GenericVec<A>
 where
     A::Item: Clone,
 {
@@ -19,7 +19,7 @@ where
     }
 }
 
-impl<A: crate::raw::RawVecInit> Default for GenericVec<A> {
+impl<A: crate::raw::RawVecWithCapacity> Default for GenericVec<A> {
     fn default() -> Self {
         Self {
             len: 0,
@@ -104,6 +104,17 @@ impl<A: ?Sized + RawVec> BorrowMut<[A::Item]> for GenericVec<A> {
 #[cfg(feature = "nightly")]
 impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
     fn from(array: [T; N]) -> Self {
-        ArrayVec::<T, N>::with_raw(unsafe { core::mem::transmute(array) })
+        let mut array = crate::ArrayVec::<T, N>::with_raw(crate::raw::Uninit::new(array));
+        unsafe {
+            array.set_len_unchecked(N);
+        }
+        array
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
+    fn from(array: [T; N]) -> Self {
+        crate::InitArrayVec::<T, N>::new(array)
     }
 }

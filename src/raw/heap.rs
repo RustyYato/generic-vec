@@ -7,3 +7,5 @@ mod stable;
 pub use nightly::Heap;
 #[cfg(not(feature = "nightly"))]
 pub use stable::Heap;
+
+const INIT_ALLOC_CAPACITY: usize = 4;

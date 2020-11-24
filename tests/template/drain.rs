@@ -1,10 +1,6 @@
-#![cfg(feature = "nightly")]
-
-use array_vec::ArrayVec;
-
 #[test]
 fn raw_drain_front() {
-    let mut vec = ArrayVec::<u8, 8>::new();
+    new_vec!(mut vec, max(8));
 
     vec.push(0);
     vec.push(2);
@@ -65,7 +61,7 @@ fn raw_drain_front() {
 
 #[test]
 fn raw_drain_back() {
-    let mut vec = ArrayVec::<u8, 8>::new();
+    new_vec!(mut vec, max(8));
 
     vec.push(0);
     vec.push(2);

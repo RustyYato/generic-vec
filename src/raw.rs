@@ -22,10 +22,12 @@ pub struct Init<T: ?Sized>(pub T);
 #[repr(transparent)]
 pub struct Uninit<T: ?Sized>(pub T);
 
+pub unsafe trait RawVecInit: RawVec {}
 pub unsafe trait RawVec {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = None;
     type Item;
+    type BufferItem;
 
     fn capacity(&self) -> usize;
     fn as_ptr(&self) -> *const Self::Item;
@@ -34,7 +36,7 @@ pub unsafe trait RawVec {
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError>;
 }
 
-pub trait RawVecInit: RawVec + Default {
+pub trait RawVecWithCapacity: RawVec + Default {
     fn with_capacity(capacity: usize) -> Self;
 
     #[doc(hidden)]

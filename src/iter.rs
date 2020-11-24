@@ -11,9 +11,9 @@ pub use {
 
 use core::iter::FromIterator;
 
-use crate::{raw::RawVecInit, GenericVec};
+use crate::{raw::RawVecWithCapacity, GenericVec};
 
-impl<V, A: RawVecInit> FromIterator<V> for GenericVec<A>
+impl<V, A: RawVecWithCapacity> FromIterator<V> for GenericVec<A>
 where
     Self: Extend<V>,
 {

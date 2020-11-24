@@ -7,6 +7,7 @@ pub type Slice<'a, T> = Init<&'a mut [T]>;
 
 unsafe impl<T> RawVec for UninitSlice<'_, T> {
     type Item = T;
+    type BufferItem = MaybeUninit<T>;
 
     fn capacity(&self) -> usize {
         self.0.len()
@@ -36,8 +37,10 @@ unsafe impl<T> RawVec for UninitSlice<'_, T> {
     }
 }
 
+unsafe impl<T: Copy> crate::raw::RawVecInit for Slice<'_, T> {}
 unsafe impl<T: Copy> RawVec for Slice<'_, T> {
     type Item = T;
+    type BufferItem = T;
 
     fn capacity(&self) -> usize {
         self.0.len()

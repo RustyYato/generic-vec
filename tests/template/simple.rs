@@ -1,10 +1,6 @@
-#![cfg(feature = "nightly")]
-
-use array_vec::ArrayVec;
-
 #[test]
 pub fn simple() {
-    let mut vec = ArrayVec::<u8, 8>::new();
+    new_vec!(mut vec, max(8));
 
     assert_eq!(vec.len(), 0);
     vec.push(0);

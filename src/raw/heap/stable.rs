@@ -1,6 +1,7 @@
-use crate::raw::{AllocError, RawVec, RawVecInit};
+use crate::raw::{AllocError, RawVec, RawVecWithCapacity};
 
 use core::alloc::Layout;
+use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
@@ -50,6 +51,7 @@ impl<T> Default for Heap<T> {
 
 unsafe impl<T> RawVec for Heap<T> {
     type Item = T;
+    type BufferItem = MaybeUninit<T>;
 
     fn capacity(&self) -> usize {
         self.capacity
@@ -122,7 +124,7 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
     }
 }
 
-impl<T> RawVecInit for Heap<T> {
+impl<T> RawVecWithCapacity for Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::new();
@@ -155,11 +157,13 @@ impl<T> Heap<T> {
         assert!(new_capacity > self.capacity);
 
         // grow by at least doubling
-        let new_capacity = new_capacity.max(
-            self.capacity
-                .checked_mul(2)
-                .expect("Could not grow further"),
-        );
+        let new_capacity = new_capacity
+            .max(
+                self.capacity
+                    .checked_mul(2)
+                    .expect("Could not grow further"),
+            )
+            .max(super::INIT_ALLOC_CAPACITY);
         let layout = repeat(Layout::new::<T>(), new_capacity).expect("Invalid layout");
 
         let ptr = if self.capacity == 0 {
@@ -178,6 +182,7 @@ impl<T> Heap<T> {
         };
 
         self.ptr = ptr.cast();
+        self.capacity = new_capacity;
 
         Ok(())
     }
