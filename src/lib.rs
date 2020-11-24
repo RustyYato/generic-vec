@@ -201,6 +201,10 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         self.len
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub unsafe fn set_len_unchecked(&mut self, len: usize) {
         self.len = len;
     }
@@ -210,6 +214,10 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         A: raw::RawVecInit,
     {
         unsafe {
+            assert!(
+                len <= self.capacity(),
+                "Tried to set the length to larger than the capacity"
+            );
             self.set_len_unchecked(len);
         }
     }
@@ -369,7 +377,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[cfg(feature = "nightly")]
     pub fn remove_array<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
         assert!(
-            self.len() < index || self.len().wrapping_sub(index) < N,
+            self.len() >= index && self.len().wrapping_sub(index) >= N,
             "Tried to remove {} elements at index {}, but length is {}",
             N,
             index,
@@ -523,6 +531,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             }
 
             let len = self.len();
+            self.set_len_unchecked(len.wrapping_add(1));
             let ptr = self.raw.as_mut_ptr().add(index);
             ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
             ptr.write(value);
@@ -615,8 +624,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
                 len,
             );
 
-            let ptr = self.raw.as_mut_ptr();
-            let value = ptr::read(self.get_unchecked(index));
+            self.set_len_unchecked(len.wrapping_sub(1));
+            let ptr = self.raw.as_mut_ptr().add(index);
+            let value = ptr.read();
             ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
             value
         }
@@ -664,6 +674,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             }
 
             let len = self.len();
+            self.set_len_unchecked(len.wrapping_sub(1));
             let ptr = self.raw.as_mut_ptr();
             let at = ptr.add(index);
             let end = ptr.add(len.wrapping_sub(1));
@@ -689,12 +700,29 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             A::CONST_CAPACITY,
         );
 
-        unsafe {
-            vec.extend_from_slice_unchecked(self.get_unchecked(index..));
-            self.set_len_unchecked(index);
-        }
+        self.split_off_into(index, &mut vec);
 
         vec
+    }
+
+    pub fn split_off_into<B: raw::RawVec<Item = A::Item>>(
+        &mut self,
+        index: usize,
+        other: &mut GenericVec<B>,
+    ) {
+        assert!(
+            index <= self.len(),
+            "Tried to split at index {}, but length is {}",
+            index,
+            self.len()
+        );
+
+        unsafe {
+            let slice = self.get_unchecked(index..);
+            other.reserve(slice.len());
+            other.extend_from_slice_unchecked(slice);
+            self.set_len_unchecked(index);
+        }
     }
 
     pub fn convert<B: raw::RawVecWithCapacity<Item = A::Item>>(mut self) -> GenericVec<B>
@@ -763,7 +791,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             self.as_mut_ptr()
                 .add(len)
                 .copy_from_nonoverlapping(slice.as_ptr(), slice.len());
-            self.set_len_unchecked(len.wrapping_sub(slice.len()));
+            self.set_len_unchecked(len.wrapping_add(slice.len()));
         }
     }
 

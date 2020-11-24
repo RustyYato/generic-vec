@@ -27,7 +27,7 @@ macro_rules! imp_make_tests_files {
 
 macro_rules! make_tests_files {
     () => {
-        imp_make_tests_files! { drain, simple, splice }
+        imp_make_tests_files! { drain, simple, splice, vec_ops }
     };
 }
 
