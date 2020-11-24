@@ -86,13 +86,15 @@ impl<A: ?Sized + RawVec> Deref for GenericVec<A> {
     type Target = [A::Item];
 
     fn deref(&self) -> &Self::Target {
-        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len) }
+        let len = self.len();
+        unsafe { core::slice::from_raw_parts(self.as_ptr(), len) }
     }
 }
 
 impl<A: ?Sized + RawVec> DerefMut for GenericVec<A> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len) }
+        let len = self.len();
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
     }
 }
 
@@ -123,11 +125,10 @@ impl<A: raw::RawVecWithCapacity> GenericVec<A> {
         capacity: usize,
         old_capacity: Option<usize>,
     ) -> Self {
-        Self {
-            len: 0,
-            raw: A::__with_capacity__const_capacity_checked(capacity, old_capacity),
-            mark: PhantomData,
-        }
+        Self::with_raw(A::__with_capacity__const_capacity_checked(
+            capacity,
+            old_capacity,
+        ))
     }
 }
 
@@ -208,7 +209,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     where
         A: raw::RawVecInit,
     {
-        self.len = len;
+        unsafe {
+            self.set_len_unchecked(len);
+        }
     }
 
     pub fn capacity(&self) -> usize {
@@ -233,22 +236,23 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub fn remaining(&mut self) -> &mut [A::BufferItem] {
         unsafe {
+            let len = self.len();
             let cap = self.raw.capacity();
             core::slice::from_raw_parts_mut(
-                self.raw.as_mut_ptr().add(self.len).cast(),
-                cap.wrapping_sub(self.len),
+                self.raw.as_mut_ptr().add(len).cast(),
+                cap.wrapping_sub(len),
             )
         }
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        if let Some(new_capacity) = self.len.checked_add(additional) {
+        if let Some(new_capacity) = self.len().checked_add(additional) {
             self.raw.reserve(new_capacity)
         }
     }
 
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), raw::AllocError> {
-        if let Some(new_capacity) = self.len.checked_add(additional) {
+        if let Some(new_capacity) = self.len().checked_add(additional) {
             self.raw.try_reserve(new_capacity)
         } else {
             Ok(())
@@ -256,10 +260,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     pub fn truncate(&mut self, len: usize) {
-        if let Some(diff) = self.len.checked_sub(len) {
-            self.len = len;
-
+        if let Some(diff) = self.len().checked_sub(len) {
             unsafe {
+                self.set_len_unchecked(len);
                 core::slice::from_raw_parts_mut(self.as_mut_ptr().add(len), diff);
             }
         }
@@ -295,8 +298,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
         unsafe {
+            let len = self.len();
             let ptr = self.raw.as_mut_ptr().add(index);
-            ptr.add(1).copy_from(ptr, self.len.wrapping_sub(index));
+            ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
             ptr.write(value);
             &mut *ptr
         }
@@ -328,19 +332,20 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
+            let len = self.len();
             let ptr = self.raw.as_mut_ptr();
             let value = ptr::read(self.get_unchecked(index));
-            ptr.copy_from(ptr.add(1), self.len.wrapping_sub(index).wrapping_sub(1));
+            ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
             value
         }
     }
 
     pub fn remove(&mut self, index: usize) -> A::Item {
         assert!(
-            index < self.len,
+            index < self.len(),
             "Tried to remove item at index {}, but length is {}",
             index,
-            self.len
+            self.len()
         );
 
         unsafe { self.remove_unchecked(index) }
@@ -356,9 +361,10 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
+            let len = self.len();
             let ptr = self.raw.as_mut_ptr();
             let at = ptr.add(index);
-            let end = ptr.add(self.len.wrapping_sub(1));
+            let end = ptr.add(len.wrapping_sub(1));
             let value = at.read();
             at.copy_from(end, 1);
             value
@@ -367,17 +373,17 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub fn swap_remove(&mut self, index: usize) -> A::Item {
         assert!(
-            index < self.len,
+            index < self.len(),
             "Tried to remove item at index {}, but length is {}",
             index,
-            self.len
+            self.len()
         );
 
         unsafe { self.swap_remove_unchecked(index) }
     }
 
     pub fn try_swap_remove(&mut self, index: usize) -> Option<A::Item> {
-        if index < self.len {
+        if index < self.len() {
             unsafe { Some(self.swap_remove_unchecked(index)) }
         } else {
             None
@@ -386,27 +392,29 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn push_unchecked(&mut self, value: A::Item) -> &mut A::Item {
         debug_assert_ne!(
-            self.len,
+            self.len(),
             self.capacity(),
             "Tried to `push_unchecked` past capacity! This is UB in release mode"
         );
         unsafe {
-            let ptr = self.as_mut_ptr().add(self.len);
-            self.len += 1;
+            let len = self.len();
+            self.set_len_unchecked(len.wrapping_add(1));
+            let ptr = self.as_mut_ptr().add(len);
             ptr.write(value);
             &mut *ptr
         }
     }
 
     pub unsafe fn pop_unchecked(&mut self) -> A::Item {
+        let len = self.len();
         debug_assert_ne!(
-            self.len,
-            self.capacity(),
+            len, 0,
             "Tried to `pop_unchecked` an empty array vec! This is UB in release mode"
         );
         unsafe {
-            self.len -= 1;
-            self.as_mut_ptr().add(self.len).read()
+            let len = len.wrapping_sub(1);
+            self.set_len_unchecked(len);
+            self.as_mut_ptr().add(len).read()
         }
     }
 
@@ -415,20 +423,20 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         index: usize,
     ) -> GenericVec<B> {
         assert!(
-            index <= self.len,
+            index <= self.len(),
             "Tried to split at index {}, but length is {}",
             index,
-            self.len
+            self.len()
         );
 
         let mut vec = GenericVec::<B>::__with_capacity__const_capacity_checked(
-            self.len.wrapping_sub(index),
+            self.len().wrapping_sub(index),
             A::CONST_CAPACITY,
         );
 
         unsafe {
             vec.extend_from_slice_unchecked(self.get_unchecked(index..));
-            self.len = index;
+            self.set_len_unchecked(index);
         }
 
         vec
@@ -443,9 +451,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub fn consume<B: raw::RawVec<Item = A::Item>>(&mut self, other: &mut GenericVec<B>) {
         unsafe {
-            self.reserve(other.len);
+            self.reserve(other.len());
             self.extend_from_slice_unchecked(other);
-            other.len = 0;
+            other.set_len_unchecked(0);
         }
     }
 
@@ -496,11 +504,12 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
 
     pub unsafe fn extend_from_slice_unchecked(&mut self, slice: &[A::Item]) {
         unsafe {
+            let len = self.len();
             self.as_mut_ptr()
-                .add(self.len)
+                .add(len)
                 .copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+            self.set_len_unchecked(len.wrapping_sub(slice.len()));
         }
-        self.len += slice.len();
     }
 
     pub fn extend_from_slice(&mut self, slice: &[A::Item])

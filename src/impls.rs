@@ -21,11 +21,7 @@ where
 
 impl<A: crate::raw::RawVecWithCapacity> Default for GenericVec<A> {
     fn default() -> Self {
-        Self {
-            len: 0,
-            mark: Default::default(),
-            raw: Default::default(),
-        }
+        Self::with_raw(Default::default())
     }
 }
 
@@ -113,7 +109,7 @@ impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
 }
 
 #[cfg(feature = "nightly")]
-impl<T, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
+impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
     fn from(array: [T; N]) -> Self {
         crate::InitArrayVec::<T, N>::new(array)
     }

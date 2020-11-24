@@ -69,7 +69,7 @@ impl<A: ?Sized + RawVec> FusedIterator for IntoIter<A> {}
 impl<A: ?Sized + RawVec> ExactSizeIterator for IntoIter<A> {
     #[cfg(feature = "nightly")]
     fn is_empty(&self) -> bool {
-        self.index == self.vec.len
+        self.index == self.vec.len()
     }
 }
 
@@ -80,7 +80,7 @@ impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {
     type Item = A::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.vec.len {
+        if self.index == self.vec.len() {
             None
         } else {
             unsafe {
@@ -92,7 +92,7 @@ impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.vec.len.wrapping_sub(self.index);
+        let len = self.vec.len().wrapping_sub(self.index);
         (len, Some(len))
     }
 
@@ -118,7 +118,7 @@ impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {
 
 impl<A: ?Sized + RawVec> DoubleEndedIterator for IntoIter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.index == self.vec.len {
+        if self.index == self.vec.len() {
             None
         } else {
             unsafe { Some(self.vec.pop_unchecked()) }

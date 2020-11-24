@@ -79,7 +79,10 @@ where
     }
 
     default unsafe fn grow(&mut self, additional: usize, value: A::Item) {
-        self.len += additional;
+        let len = self.len();
+        unsafe {
+            self.set_len_unchecked(len.wrapping_add(additional));
+        }
         let mut ptr = self.raw.as_mut_ptr();
 
         for _ in 0..additional {

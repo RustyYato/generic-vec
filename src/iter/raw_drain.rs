@@ -27,7 +27,7 @@ impl<A: ?Sized + RawVec> Drop for RawDrain<'_, A> {
                 self.write_front.copy_from(self.write_back, back_len);
             }
 
-            (*self.vec).len = len;
+            (*self.vec).set_len_unchecked(len);
         }
     }
 }
@@ -44,8 +44,8 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
             let ptr = vec.as_mut_ptr();
             let range = vec[range].as_mut_ptr_range();
 
-            let old_vec_len = vec.len;
-            vec.len = range.start.offset_from(ptr) as usize;
+            let old_vec_len = vec.len();
+            vec.set_len_unchecked(range.start.offset_from(ptr) as usize);
 
             Self {
                 vec: raw_vec,
