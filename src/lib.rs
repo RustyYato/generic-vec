@@ -25,7 +25,7 @@ use std::boxed::Box;
 
 use core::{
     marker::PhantomData,
-    mem,
+    mem::{self, MaybeUninit},
     ops::{Deref, DerefMut},
     ptr,
 };
@@ -109,21 +109,46 @@ impl<T> Vec<T> {
 #[cfg(feature = "nightly")]
 impl<T, A: std::alloc::AllocRef> Vec<T, A> {
     pub fn with_alloc(alloc: A) -> Self {
+        Self::with_raw(raw::Heap::with_alloc(alloc))
+    }
+}
+
+impl<'a, T> SliceVec<'a, T> {
+    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self {
+        Self::with_raw(raw::Uninit(slice))
+    }
+}
+
+impl<'a, T: Copy> InitSliceVec<'a, T> {
+    pub fn new(slice: &'a mut [T]) -> Self {
+        Self::with_raw(raw::Init(slice))
+    }
+}
+
+impl<A: raw::RawVecInit> GenericVec<A> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_raw(A::with_capacity(capacity))
+    }
+
+    #[inline]
+    #[allow(non_snake_case)]
+    fn __with_capacity__const_capacity_checked(
+        capacity: usize,
+        old_capacity: Option<usize>,
+    ) -> Self {
         Self {
             len: 0,
+            raw: A::__with_capacity__const_capacity_checked(capacity, old_capacity),
             mark: PhantomData,
-            raw: raw::Heap::with_alloc(alloc),
         }
     }
 }
 
-// TODO: insert, remove, swap_remove, split_off, docs
-
-impl<A: raw::RawVecInit> GenericVec<A> {
-    pub fn with_capacity(capacity: usize) -> Self {
+impl<A: RawVec> GenericVec<A> {
+    pub fn with_raw(raw: A) -> Self {
         Self {
+            raw,
             len: 0,
-            raw: A::with_capacity(capacity),
             mark: PhantomData,
         }
     }
@@ -172,8 +197,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    #[cfg(feature = "nightly")]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), core::alloc::AllocError> {
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), raw::AllocError> {
         if let Some(new_capacity) = self.len.checked_add(additional) {
             self.raw.try_reserve(new_capacity)
         } else {
@@ -219,11 +243,94 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
+    pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+        unsafe {
+            let ptr = self.raw.as_mut_ptr().add(index);
+            ptr.add(1).copy_from(ptr, self.len.wrapping_sub(index));
+            ptr.write(value);
+            &mut *ptr
+        }
+    }
+
+    pub unsafe fn insert(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+        if self.len() == self.capacity() {
+            self.reserve(1);
+        }
+
+        unsafe { self.insert_unchecked(index, value) }
+    }
+
+    pub fn try_insert(&mut self, index: usize, value: A::Item) -> Result<&mut A::Item, A::Item> {
+        if self.len() == self.capacity() {
+            Err(value)
+        } else {
+            unsafe { Ok(self.insert_unchecked(index, value)) }
+        }
+    }
+
     pub fn pop(&mut self) -> Option<A::Item> {
         if self.len() == 0 {
             None
         } else {
             unsafe { Some(self.pop_unchecked()) }
+        }
+    }
+
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
+        unsafe {
+            let ptr = self.raw.as_mut_ptr();
+            let value = ptr::read(self.get_unchecked(index));
+            ptr.copy_from(ptr.add(1), self.len.wrapping_sub(index).wrapping_sub(1));
+            value
+        }
+    }
+
+    pub fn remove(&mut self, index: usize) -> A::Item {
+        assert!(
+            index < self.len,
+            "Tried to remove item at index {}, but length is {}",
+            index,
+            self.len
+        );
+
+        unsafe { self.remove_unchecked(index) }
+    }
+
+    pub fn try_remove(&mut self, index: usize) -> Option<A::Item> {
+        if self.len() < index {
+            unsafe { Some(self.remove_unchecked(index)) }
+        } else {
+            None
+        }
+    }
+
+    pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
+        unsafe {
+            let ptr = self.raw.as_mut_ptr();
+            let at = ptr.add(index);
+            let end = ptr.add(self.len.wrapping_sub(1));
+            let value = at.read();
+            at.copy_from(end, 1);
+            value
+        }
+    }
+
+    pub fn swap_remove(&mut self, index: usize) -> A::Item {
+        assert!(
+            index < self.len,
+            "Tried to remove item at index {}, but length is {}",
+            index,
+            self.len
+        );
+
+        unsafe { self.swap_remove_unchecked(index) }
+    }
+
+    pub fn try_swap_remove(&mut self, index: usize) -> Option<A::Item> {
+        if index < self.len {
+            unsafe { Some(self.swap_remove_unchecked(index)) }
+        } else {
+            None
         }
     }
 
@@ -250,6 +357,42 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe {
             self.len -= 1;
             self.as_mut_ptr().add(self.len).read()
+        }
+    }
+
+    pub fn split_off<B: raw::RawVecInit<Item = A::Item>>(&mut self, index: usize) -> GenericVec<B> {
+        assert!(
+            index <= self.len,
+            "Tried to split at index {}, but length is {}",
+            index,
+            self.len
+        );
+
+        let mut vec = GenericVec::<B>::__with_capacity__const_capacity_checked(
+            self.len.wrapping_sub(index),
+            A::CONST_CAPACITY,
+        );
+
+        unsafe {
+            vec.extend_from_slice_unchecked(self.get_unchecked(index..));
+            self.len = index;
+        }
+
+        vec
+    }
+
+    pub fn convert<B: raw::RawVecInit<Item = A::Item>>(mut self) -> GenericVec<B>
+    where
+        A: Sized,
+    {
+        self.split_off(0)
+    }
+
+    pub fn consume<B: raw::RawVec<Item = A::Item>>(&mut self, other: &mut GenericVec<B>) {
+        unsafe {
+            self.reserve(other.len);
+            self.extend_from_slice_unchecked(other);
+            other.len = 0;
         }
     }
 

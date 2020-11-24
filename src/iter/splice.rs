@@ -1,5 +1,6 @@
 use crate::{RawDrain, RawVec};
 
+// FIXME: splice needs to insert *all* elements of the iterator, it currently does not!
 pub struct Splice<'a, A, I>
 where
     A: ?Sized + RawVec,

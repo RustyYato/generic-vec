@@ -18,11 +18,13 @@ pub use heap::Heap;
 pub use slice::{Slice, UninitSlice};
 
 #[repr(transparent)]
-pub struct Init<T: ?Sized>(T);
+pub struct Init<T: ?Sized>(pub T);
 #[repr(transparent)]
-pub struct Uninit<T: ?Sized>(T);
+pub struct Uninit<T: ?Sized>(pub T);
 
 pub unsafe trait RawVec {
+    #[doc(hidden)]
+    const CONST_CAPACITY: Option<usize> = None;
     type Item;
 
     fn capacity(&self) -> usize;
@@ -34,4 +36,14 @@ pub unsafe trait RawVec {
 
 pub trait RawVecInit: RawVec + Default {
     fn with_capacity(capacity: usize) -> Self;
+
+    #[doc(hidden)]
+    #[inline(always)]
+    #[allow(non_snake_case)]
+    fn __with_capacity__const_capacity_checked(
+        capacity: usize,
+        _old_capacity: Option<usize>,
+    ) -> Self {
+        Self::with_capacity(capacity)
+    }
 }

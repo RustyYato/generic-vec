@@ -18,7 +18,7 @@ impl<T, const N: usize> UninitArray<T, N> {
 
 impl<T, const N: usize> Default for UninitArray<T, N> {
     fn default() -> Self {
-        Self::uninit()
+        unsafe { MaybeUninit::uninit().assume_init() }
     }
 }
 
@@ -30,7 +30,7 @@ impl<T: Default + Copy, const N: usize> Default for Array<T, N> {
 
 impl<T, const N: usize> Clone for UninitArray<T, N> {
     fn clone(&self) -> Self {
-        Self::uninit()
+        Self::default()
     }
 }
 
@@ -51,9 +51,24 @@ impl<T, const N: usize> RawVecInit for UninitArray<T, N> {
 
         Self::default()
     }
+
+    #[inline]
+    #[doc(hidden)]
+    #[allow(non_snake_case)]
+    fn __with_capacity__const_capacity_checked(
+        capacity: usize,
+        old_capacity: Option<usize>,
+    ) -> Self {
+        match old_capacity {
+            Some(old_capacity) if old_capacity <= N => Self::default(),
+            _ => Self::with_capacity(capacity),
+        }
+    }
 }
 
 unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
+    #[doc(hidden)]
+    const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;
 
     fn capacity(&self) -> usize {
@@ -94,9 +109,24 @@ impl<T: Default + Copy, const N: usize> RawVecInit for Array<T, N> {
 
         Self::default()
     }
+
+    #[inline]
+    #[doc(hidden)]
+    #[allow(non_snake_case)]
+    fn __with_capacity__const_capacity_checked(
+        capacity: usize,
+        old_capacity: Option<usize>,
+    ) -> Self {
+        match old_capacity {
+            Some(old_capacity) if old_capacity <= N => Self::default(),
+            _ => Self::with_capacity(capacity),
+        }
+    }
 }
 
 unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
+    #[doc(hidden)]
+    const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;
 
     fn capacity(&self) -> usize {

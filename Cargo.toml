@@ -1,5 +1,5 @@
 [package]
-name = "array-vec"
+name = "generic-vec"
 version = "0.1.0"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
@@ -8,7 +8,7 @@ edition = "2018"
 
 [features]
 
-default = []
+default = ['std']
 
 std = ['alloc']
 alloc = []
