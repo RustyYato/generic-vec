@@ -15,6 +15,3 @@ alloc = []
 nightly = []
 
 [dependencies]
-
-[build-dependencies]
-walkdir = '2'
