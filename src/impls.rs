@@ -16,8 +16,10 @@ where
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.clear();
-        self.extend_from_slice(source);
+        self.truncate(source.len());
+        let (init, tail) = source.split_at(self.len());
+        self.clone_from_slice(init);
+        self.extend_from_slice(tail);
     }
 }
 
