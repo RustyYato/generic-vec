@@ -180,7 +180,10 @@ impl<'a, T> SliceVec<'a, T> {
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     pub fn new(slice: &'a mut [T]) -> Self {
-        Self::with_raw(raw::Init(slice))
+        let len = slice.len();
+        let mut vec = Self::with_raw(raw::Init(slice));
+        vec.set_len(len);
+        vec
     }
 }
 
