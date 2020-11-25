@@ -40,6 +40,12 @@ fn splice_less() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "alloc"),
+    should_panic(
+        expected = "Tried to splice in an iterator larger than the given range! This requires an allocator to work."
+    )
+)]
 fn splice_from_zero() {
     let output = mockalloc::record_allocs(|| {
         new_vec!(mut vec, max(10));
