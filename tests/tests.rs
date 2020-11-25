@@ -14,8 +14,7 @@ static ALLOC: Mockalloc<System> = Mockalloc(System);
 
 #[global_allocator]
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-static ALLOC: Mockalloc<static_alloc::Bump<[u8; 1 << 22]>> =
-    Mockalloc(static_alloc::Bump::new([0; 1 << 22]));
+static ALLOC: Mockalloc<static_alloc::Bump<[u8; 1 << 22]>> = Mockalloc(static_alloc::Bump::new([0; 1 << 22]));
 
 #[cfg(feature = "alloc")]
 macro_rules! S {

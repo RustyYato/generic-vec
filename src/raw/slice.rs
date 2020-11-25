@@ -9,17 +9,11 @@ unsafe impl<T> RawVec for UninitSlice<'_, T> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
-    fn capacity(&self) -> usize {
-        self.0.len()
-    }
+    fn capacity(&self) -> usize { self.0.len() }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.0.as_ptr().cast()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.0.as_mut_ptr().cast()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(
@@ -42,17 +36,11 @@ unsafe impl<T: Copy> RawVec for Slice<'_, T> {
     type Item = T;
     type BufferItem = T;
 
-    fn capacity(&self) -> usize {
-        self.0.len()
-    }
+    fn capacity(&self) -> usize { self.0.len() }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.0.as_ptr().cast()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.0.as_mut_ptr().cast()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(

@@ -1,8 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(
-    feature = "nightly",
-    feature(min_const_generics, unsafe_block_in_unsafe_fn)
-)]
+#![cfg_attr(feature = "nightly", feature(min_const_generics, unsafe_block_in_unsafe_fn))]
 #![cfg_attr(
     feature = "nightly",
     feature(
@@ -68,10 +65,7 @@ macro_rules! uninit_array {
     };
 
     ($n:expr) => {
-        unsafe {
-            $crate::macros::MaybeUninit::<[$crate::macros::MaybeUninit<_>; $n]>::uninit()
-                .assume_init()
-        }
+        unsafe { $crate::macros::MaybeUninit::<[$crate::macros::MaybeUninit<_>; $n]>::uninit().assume_init() }
     };
 }
 
@@ -99,9 +93,7 @@ impl<A: ?Sized + RawVec> DerefMut for GenericVec<A> {
 }
 
 impl<A: ?Sized + RawVec> Drop for GenericVec<A> {
-    fn drop(&mut self) {
-        unsafe { ptr::drop_in_place(self.as_mut_slice()) }
-    }
+    fn drop(&mut self) { unsafe { ptr::drop_in_place(self.as_mut_slice()) } }
 }
 
 impl<A: RawVec> GenericVec<A> {
@@ -115,20 +107,12 @@ impl<A: RawVec> GenericVec<A> {
 }
 
 impl<A: raw::RawVecWithCapacity> GenericVec<A> {
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_raw(A::with_capacity(capacity))
-    }
+    pub fn with_capacity(capacity: usize) -> Self { Self::with_raw(A::with_capacity(capacity)) }
 
     #[inline]
     #[allow(non_snake_case)]
-    fn __with_capacity__const_capacity_checked(
-        capacity: usize,
-        old_capacity: Option<usize>,
-    ) -> Self {
-        Self::with_raw(A::__with_capacity__const_capacity_checked(
-            capacity,
-            old_capacity,
-        ))
+    fn __with_capacity__const_capacity_checked(capacity: usize, old_capacity: Option<usize>) -> Self {
+        Self::with_raw(A::__with_capacity__const_capacity_checked(capacity, old_capacity))
     }
 }
 
@@ -168,15 +152,11 @@ impl<T> Vec<T> {
 #[cfg(feature = "alloc")]
 #[cfg(feature = "nightly")]
 impl<T, A: std::alloc::AllocRef> Vec<T, A> {
-    pub fn with_alloc(alloc: A) -> Self {
-        Self::with_raw(raw::Heap::with_alloc(alloc))
-    }
+    pub fn with_alloc(alloc: A) -> Self { Self::with_raw(raw::Heap::with_alloc(alloc)) }
 }
 
 impl<'a, T> SliceVec<'a, T> {
-    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self {
-        Self::with_raw(raw::Uninit(slice))
-    }
+    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_raw(raw::Uninit(slice)) }
 }
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
@@ -189,25 +169,15 @@ impl<'a, T: Copy> InitSliceVec<'a, T> {
 }
 
 impl<A: ?Sized + RawVec> GenericVec<A> {
-    pub fn as_ptr(&self) -> *const A::Item {
-        self.raw.as_ptr()
-    }
+    pub fn as_ptr(&self) -> *const A::Item { self.raw.as_ptr() }
 
-    pub fn as_mut_ptr(&mut self) -> *mut A::Item {
-        self.raw.as_mut_ptr()
-    }
+    pub fn as_mut_ptr(&mut self) -> *mut A::Item { self.raw.as_mut_ptr() }
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
+    pub fn len(&self) -> usize { self.len }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
 
-    pub unsafe fn set_len_unchecked(&mut self, len: usize) {
-        self.len = len;
-    }
+    pub unsafe fn set_len_unchecked(&mut self, len: usize) { self.len = len; }
 
     pub fn set_len(&mut self, len: usize)
     where
@@ -222,34 +192,21 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    pub fn capacity(&self) -> usize {
-        self.raw.capacity()
-    }
+    pub fn capacity(&self) -> usize { self.raw.capacity() }
 
-    pub fn as_slice(&self) -> &[A::Item] {
-        self
-    }
+    pub fn as_slice(&self) -> &[A::Item] { self }
 
-    pub fn as_mut_slice(&mut self) -> &mut [A::Item] {
-        self
-    }
+    pub fn as_mut_slice(&mut self) -> &mut [A::Item] { self }
 
-    pub unsafe fn raw_buffer(&self) -> &A {
-        &self.raw
-    }
+    pub unsafe fn raw_buffer(&self) -> &A { &self.raw }
 
-    pub unsafe fn raw_buffer_mut(&mut self) -> &mut A {
-        &mut self.raw
-    }
+    pub unsafe fn raw_buffer_mut(&mut self) -> &mut A { &mut self.raw }
 
     pub fn remaining(&mut self) -> &mut [A::BufferItem] {
         unsafe {
             let len = self.len();
             let cap = self.raw.capacity();
-            core::slice::from_raw_parts_mut(
-                self.raw.as_mut_ptr().add(len).cast(),
-                cap.wrapping_sub(len),
-            )
+            core::slice::from_raw_parts_mut(self.raw.as_mut_ptr().add(len).cast(), cap.wrapping_sub(len))
         }
     }
 
@@ -284,9 +241,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { extension::Extension::grow(self, additional, value) }
     }
 
-    pub fn clear(&mut self) {
-        self.truncate(0);
-    }
+    pub fn clear(&mut self) { self.truncate(0); }
 
     pub fn push(&mut self, value: A::Item) -> &mut A::Item {
         if self.len() == self.capacity() {
@@ -321,11 +276,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     #[cfg(feature = "nightly")]
-    pub fn insert_array<const N: usize>(
-        &mut self,
-        index: usize,
-        value: [A::Item; N],
-    ) -> &mut [A::Item; N] {
+    pub fn insert_array<const N: usize>(&mut self, index: usize, value: [A::Item; N]) -> &mut [A::Item; N] {
         assert!(
             index <= self.len(),
             "Tried to insert at {}, but length is {}",
@@ -341,11 +292,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     pub fn pop(&mut self) -> A::Item {
-        assert_ne!(
-            self.len(),
-            0,
-            "Tried to pop an element from an empty vector",
-        );
+        assert_ne!(self.len(), 0, "Tried to pop an element from an empty vector",);
 
         unsafe { self.pop_unchecked() }
     }
@@ -407,10 +354,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     #[cfg(feature = "nightly")]
-    pub fn try_push_array<const N: usize>(
-        &mut self,
-        value: [A::Item; N],
-    ) -> Result<&mut [A::Item; N], [A::Item; N]> {
+    pub fn try_push_array<const N: usize>(&mut self, value: [A::Item; N]) -> Result<&mut [A::Item; N], [A::Item; N]> {
         if self.capacity().wrapping_sub(self.len()) < N {
             Err(value)
         } else {
@@ -502,10 +446,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     #[cfg(feature = "nightly")]
-    pub unsafe fn push_array_unchecked<const N: usize>(
-        &mut self,
-        value: [A::Item; N],
-    ) -> &mut [A::Item; N] {
+    pub unsafe fn push_array_unchecked<const N: usize>(&mut self, value: [A::Item; N]) -> &mut [A::Item; N] {
         match A::CONST_CAPACITY {
             Some(n) if n < N => {
                 panic!("Tried to push an array larger than the maximum capacity of the vector!")
@@ -587,10 +528,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[cfg(feature = "nightly")]
     pub unsafe fn pop_array_unchecked<const N: usize>(&mut self) -> [A::Item; N] {
         match A::CONST_CAPACITY {
-            Some(n) if n < N => panic!(
-                "Tried to remove {} elements from a {} capacity vector!",
-                N, n
-            ),
+            Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),
             _ => (),
         }
 
@@ -635,10 +573,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[cfg(feature = "nightly")]
     pub unsafe fn remove_array_unchecked<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
         match A::CONST_CAPACITY {
-            Some(n) if n < N => panic!(
-                "Tried to remove {} elements from a {} capacity vector!",
-                N, n
-            ),
+            Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),
             _ => (),
         }
 
@@ -684,10 +619,10 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    pub fn split_off<B: raw::RawVecWithCapacity<Item = A::Item>>(
-        &mut self,
-        index: usize,
-    ) -> GenericVec<B> {
+    pub fn split_off<B>(&mut self, index: usize) -> GenericVec<B>
+    where
+        B: raw::RawVecWithCapacity<Item = A::Item>,
+    {
         assert!(
             index <= self.len(),
             "Tried to split at index {}, but length is {}",
@@ -695,21 +630,18 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
             self.len()
         );
 
-        let mut vec = GenericVec::<B>::__with_capacity__const_capacity_checked(
-            self.len().wrapping_sub(index),
-            A::CONST_CAPACITY,
-        );
+        let mut vec =
+            GenericVec::<B>::__with_capacity__const_capacity_checked(self.len().wrapping_sub(index), A::CONST_CAPACITY);
 
         self.split_off_into(index, &mut vec);
 
         vec
     }
 
-    pub fn split_off_into<B: raw::RawVec<Item = A::Item>>(
-        &mut self,
-        index: usize,
-        other: &mut GenericVec<B>,
-    ) {
+    pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<B>)
+    where
+        B: raw::RawVec<Item = A::Item>,
+    {
         assert!(
             index <= self.len(),
             "Tried to split at index {}, but length is {}",
@@ -779,9 +711,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     where
         F: FnMut(&mut A::Item) -> bool,
     {
-        fn not<F: FnMut(&mut T) -> bool, T>(mut f: F) -> impl FnMut(&mut T) -> bool {
-            move |value| !f(value)
-        }
+        fn not<F: FnMut(&mut T) -> bool, T>(mut f: F) -> impl FnMut(&mut T) -> bool { move |value| !f(value) }
         self.drain_filter(.., not(f));
     }
 

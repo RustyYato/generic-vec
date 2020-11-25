@@ -49,24 +49,16 @@ where
     A::Item: Clone,
 {
     #[cfg(feature = "nightly")]
-    default unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) {
-        clone_extend_from_slice(self, slice)
-    }
+    default unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { clone_extend_from_slice(self, slice) }
 
     #[cfg(not(feature = "nightly"))]
-    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) {
-        clone_extend_from_slice(self, slice)
-    }
+    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { clone_extend_from_slice(self, slice) }
 
     #[cfg(feature = "nightly")]
-    default unsafe fn grow(&mut self, additional: usize, value: A::Item) {
-        clone_grow(self, additional, value)
-    }
+    default unsafe fn grow(&mut self, additional: usize, value: A::Item) { clone_grow(self, additional, value) }
 
     #[cfg(not(feature = "nightly"))]
-    unsafe fn grow(&mut self, additional: usize, value: A::Item) {
-        clone_grow(self, additional, value)
-    }
+    unsafe fn grow(&mut self, additional: usize, value: A::Item) { clone_grow(self, additional, value) }
 }
 
 #[cfg(feature = "nightly")]
@@ -74,9 +66,7 @@ impl<A: ?Sized + RawVec> Extension<A::Item> for GenericVec<A>
 where
     A::Item: Copy,
 {
-    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) {
-        unsafe { self.extend_from_slice_unchecked(slice) }
-    }
+    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { unsafe { self.extend_from_slice_unchecked(slice) } }
 
     default unsafe fn grow(&mut self, additional: usize, value: A::Item) {
         let len = self.len();

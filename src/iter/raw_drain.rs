@@ -59,35 +59,17 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
-    // #[inline]
-    // fn start_ptr(&mut self) -> *mut A::Item {
-    //     unsafe {
-    //         let ptr = self.vec_len as *mut _ as *mut u8;
-    //         let ptr = ptr.add(core::mem::size_of_val(self.vec_len));
-    //         let offset = ptr.align_offset(core::mem::align_of::<A::Item>());
-    //         ptr.add(offset).cast::<A::Item>()
-    //     }
-    // }
+    #[inline]
+    pub fn remaining(&self) -> usize { unsafe { self.read_back.offset_from(self.read_front) as usize } }
 
     #[inline]
-    pub fn remaining(&self) -> usize {
-        unsafe { self.read_back.offset_from(self.read_front) as usize }
-    }
+    pub fn is_complete(&self) -> bool { self.read_back == self.read_front }
 
     #[inline]
-    pub fn is_complete(&self) -> bool {
-        self.read_back == self.read_front
-    }
+    pub unsafe fn front(&mut self) -> &mut A::Item { unsafe { &mut *self.read_front } }
 
     #[inline]
-    pub unsafe fn front(&mut self) -> &mut A::Item {
-        unsafe { &mut *self.read_front }
-    }
-
-    #[inline]
-    pub unsafe fn back(&mut self) -> &mut A::Item {
-        unsafe { &mut *self.read_back.sub(1) }
-    }
+    pub unsafe fn back(&mut self) -> &mut A::Item { unsafe { &mut *self.read_back.sub(1) } }
 
     #[inline]
     pub unsafe fn take_front(&mut self) -> A::Item {
@@ -116,8 +98,7 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
 
         unsafe {
             if self.write_front as *const A::Item != self.read_front {
-                self.write_front
-                    .copy_from_nonoverlapping(self.read_front, 1);
+                self.write_front.copy_from_nonoverlapping(self.read_front, 1);
             }
             self.read_front = self.read_front.add(1);
             self.write_front = self.write_front.add(1);
@@ -165,8 +146,7 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
 
     pub unsafe fn consume_write_slice_front(&mut self, slice: &[A::Item]) {
         unsafe {
-            self.write_front
-                .copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+            self.write_front.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
             self.write_front = self.write_front.add(slice.len());
         }
     }
@@ -176,7 +156,7 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
             let write_space = self.write_back.offset_from(self.write_front) as usize;
 
             if write_space >= space {
-                return;
+                return
             }
 
             let start = (*self.vec).as_mut_ptr();

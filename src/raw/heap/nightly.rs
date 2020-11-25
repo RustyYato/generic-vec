@@ -1,8 +1,6 @@
 use crate::raw::{AllocError, RawVec, RawVecWithCapacity};
 
-use core::alloc::Layout;
-use core::mem::MaybeUninit;
-use core::ptr::NonNull;
+use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 use std::alloc::handle_alloc_error;
 
 #[cfg(feature = "nightly")]
@@ -27,8 +25,7 @@ impl<T, A: ?Sized + AllocRef> Drop for Heap<T, A> {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::new::<T>();
-            let layout =
-                Layout::from_size_align_unchecked(layout.size() * self.capacity, layout.align());
+            let layout = Layout::from_size_align_unchecked(layout.size() * self.capacity, layout.align());
             self.alloc.dealloc(self.ptr.cast(), layout);
         }
     }
@@ -38,11 +35,7 @@ impl<T> Heap<T> {
     pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
-            capacity: if core::mem::size_of::<T>() == 0 {
-                usize::MAX
-            } else {
-                0
-            },
+            capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
             alloc: Global,
         }
     }
@@ -52,37 +45,25 @@ impl<T, A: AllocRef> Heap<T, A> {
     pub fn with_alloc(alloc: A) -> Self {
         Self {
             ptr: NonNull::dangling(),
-            capacity: if core::mem::size_of::<T>() == 0 {
-                usize::MAX
-            } else {
-                0
-            },
+            capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
             alloc,
         }
     }
 }
 
 impl<T, A: AllocRef + Default> Default for Heap<T, A> {
-    fn default() -> Self {
-        Self::with_alloc(Default::default())
-    }
+    fn default() -> Self { Self::with_alloc(Default::default()) }
 }
 
 unsafe impl<T, A: ?Sized + AllocRef> RawVec for Heap<T, A> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
+    fn capacity(&self) -> usize { self.capacity }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.ptr.as_ptr()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.ptr.as_ptr() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.ptr.as_ptr()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.ptr.as_ptr() }
 
     fn reserve(&mut self, new_capacity: usize) {
         if self.capacity < new_capacity {
@@ -102,13 +83,10 @@ unsafe impl<T, A: ?Sized + AllocRef> RawVec for Heap<T, A> {
 impl<T, A: Default + AllocRef> RawVecWithCapacity for Heap<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
-            return Self::default();
+            return Self::default()
         }
 
-        let layout = Layout::new::<T>()
-            .repeat(capacity)
-            .expect("Invalid layout")
-            .0;
+        let layout = Layout::new::<T>().repeat(capacity).expect("Invalid layout").0;
         let alloc = A::default();
 
         let ptr = unsafe { alloc.alloc(layout) };
@@ -129,34 +107,20 @@ impl<T, A: Default + AllocRef> RawVecWithCapacity for Heap<T, A> {
 impl<T, A: ?Sized + AllocRef> Heap<T, A> {
     #[cold]
     #[inline(never)]
-    fn reserve_slow(
-        &mut self,
-        new_capacity: usize,
-        on_failure: OnFailure,
-    ) -> Result<(), AllocError> {
+    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> Result<(), AllocError> {
         assert!(new_capacity > self.capacity);
 
         // grow by at least doubling
         let new_capacity = new_capacity
-            .max(
-                self.capacity
-                    .checked_mul(2)
-                    .expect("Could not grow further"),
-            )
+            .max(self.capacity.checked_mul(2).expect("Could not grow further"))
             .max(super::INIT_ALLOC_CAPACITY);
-        let layout = Layout::new::<T>()
-            .repeat(new_capacity)
-            .expect("Invalid layout")
-            .0;
+        let layout = Layout::new::<T>().repeat(new_capacity).expect("Invalid layout").0;
 
         let ptr = if self.capacity == 0 {
             self.alloc.alloc(layout)
         } else {
             let new_layout = layout;
-            let old_layout = Layout::new::<T>()
-                .repeat(self.capacity)
-                .expect("Invalid layout")
-                .0;
+            let old_layout = Layout::new::<T>().repeat(self.capacity).expect("Invalid layout").0;
 
             unsafe { self.alloc.grow(self.ptr.cast(), old_layout, new_layout) }
         };

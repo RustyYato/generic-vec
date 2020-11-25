@@ -51,26 +51,20 @@ impl<'a, A: ?Sized + RawVec> IntoIterator for &'a mut GenericVec<A> {
     type IntoIter = core::slice::IterMut<'a, A::Item>;
     type Item = &'a mut A::Item;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.iter_mut() }
 }
 
 impl<'a, A: ?Sized + RawVec> IntoIterator for &'a GenericVec<A> {
     type IntoIter = core::slice::Iter<'a, A::Item>;
     type Item = &'a A::Item;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.iter() }
 }
 
 impl<A: ?Sized + RawVec> FusedIterator for IntoIter<A> {}
 impl<A: ?Sized + RawVec> ExactSizeIterator for IntoIter<A> {
     #[cfg(feature = "nightly")]
-    fn is_empty(&self) -> bool {
-        self.index == self.vec.len()
-    }
+    fn is_empty(&self) -> bool { self.index == self.vec.len() }
 }
 
 #[cfg(feature = "nightly")]

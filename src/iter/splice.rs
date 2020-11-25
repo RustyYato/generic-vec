@@ -1,6 +1,5 @@
 use crate::{RawDrain, RawVec};
 
-// FIXME: splice needs to insert *all* elements of the iterator, it currently does not!
 pub struct Splice<'a, A, I>
 where
     A: ?Sized + RawVec,
@@ -11,9 +10,7 @@ where
 }
 
 impl<'a, A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Splice<'a, A, I> {
-    pub fn new(raw: RawDrain<'a, A>, replace_with: I) -> Self {
-        Self { raw, replace_with }
-    }
+    pub fn new(raw: RawDrain<'a, A>, replace_with: I) -> Self { Self { raw, replace_with } }
 }
 
 impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> {
@@ -24,8 +21,7 @@ impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> 
         {
             for _ in self.replace_with.by_ref() {
                 panic!(
-                    "Tried to splice in an iterator larger than the given range! \
-                        This requires an allocator to work."
+                    "Tried to splice in an iterator larger than the given range! This requires an allocator to work."
                 );
             }
         }
@@ -48,7 +44,7 @@ impl<'a, A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Iterator for Splice<'a
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.raw.is_complete() {
-            return None;
+            return None
         }
 
         unsafe {

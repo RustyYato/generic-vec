@@ -42,10 +42,7 @@ pub trait RawVecWithCapacity: RawVec + Default {
     #[doc(hidden)]
     #[inline(always)]
     #[allow(non_snake_case)]
-    fn __with_capacity__const_capacity_checked(
-        capacity: usize,
-        _old_capacity: Option<usize>,
-    ) -> Self {
+    fn __with_capacity__const_capacity_checked(capacity: usize, _old_capacity: Option<usize>) -> Self {
         Self::with_capacity(capacity)
     }
 }

@@ -16,9 +16,7 @@ where
     A: ?Sized + RawVec,
     F: FnMut(&mut A::Item) -> bool,
 {
-    pub fn new(raw: RawDrain<'a, A>, filter: F) -> Self {
-        Self { raw, filter }
-    }
+    pub fn new(raw: RawDrain<'a, A>, filter: F) -> Self { Self { raw, filter } }
 }
 
 impl<A, F> Drop for DrainFilter<'_, A, F>
@@ -26,9 +24,7 @@ where
     A: ?Sized + RawVec,
     F: FnMut(&mut A::Item) -> bool,
 {
-    fn drop(&mut self) {
-        self.for_each(drop);
-    }
+    fn drop(&mut self) { self.for_each(drop); }
 }
 
 impl<A, F> FusedIterator for DrainFilter<'_, A, F>
@@ -47,13 +43,13 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.raw.is_complete() {
-                break None;
+                break None
             }
 
             unsafe {
                 let value = self.raw.front();
                 if (self.filter)(value) {
-                    break Some(self.raw.take_front());
+                    break Some(self.raw.take_front())
                 } else {
                     self.raw.skip_front();
                 }
@@ -75,13 +71,13 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             if self.raw.is_complete() {
-                break None;
+                break None
             }
 
             unsafe {
                 let value = self.raw.back();
                 if (self.filter)(value) {
-                    break Some(self.raw.take_back());
+                    break Some(self.raw.take_back())
                 } else {
                     self.raw.skip_back();
                 }

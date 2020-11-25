@@ -1,9 +1,11 @@
 use crate::{raw::RawVecWithCapacity, GenericVec, RawVec};
 
-use core::borrow::{Borrow, BorrowMut};
-use core::hash::{Hash, Hasher};
-use core::ops::{Index, IndexMut};
-use core::slice::SliceIndex;
+use core::{
+    borrow::{Borrow, BorrowMut},
+    hash::{Hash, Hasher},
+    ops::{Index, IndexMut},
+    slice::SliceIndex,
+};
 
 impl<A: RawVecWithCapacity> Clone for GenericVec<A>
 where
@@ -24,18 +26,14 @@ where
 }
 
 impl<A: crate::raw::RawVecWithCapacity> Default for GenericVec<A> {
-    fn default() -> Self {
-        Self::with_raw(Default::default())
-    }
+    fn default() -> Self { Self::with_raw(Default::default()) }
 }
 
 impl<S: ?Sized + AsRef<[A::Item]>, A: ?Sized + RawVec> PartialEq<S> for GenericVec<A>
 where
     A::Item: PartialEq,
 {
-    fn eq(&self, other: &S) -> bool {
-        self.as_slice() == other.as_ref()
-    }
+    fn eq(&self, other: &S) -> bool { self.as_slice() == other.as_ref() }
 }
 
 impl<A: ?Sized + RawVec> Eq for GenericVec<A> where A::Item: Eq {}
@@ -44,27 +42,21 @@ impl<S: ?Sized + AsRef<[A::Item]>, A: ?Sized + RawVec> PartialOrd<S> for Generic
 where
     A::Item: PartialOrd,
 {
-    fn partial_cmp(&self, other: &S) -> Option<core::cmp::Ordering> {
-        self.as_slice().partial_cmp(other.as_ref())
-    }
+    fn partial_cmp(&self, other: &S) -> Option<core::cmp::Ordering> { self.as_slice().partial_cmp(other.as_ref()) }
 }
 
 impl<A: ?Sized + RawVec> Ord for GenericVec<A>
 where
     A::Item: Ord,
 {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.as_slice().cmp(other.as_ref())
-    }
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering { self.as_slice().cmp(other.as_ref()) }
 }
 
 impl<A: ?Sized + RawVec> Hash for GenericVec<A>
 where
     A::Item: Hash,
 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_slice().hash(state)
-    }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.as_slice().hash(state) }
 }
 
 use core::fmt;
@@ -72,33 +64,23 @@ impl<A: ?Sized + RawVec> fmt::Debug for GenericVec<A>
 where
     A::Item: fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_slice().fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.as_slice().fmt(f) }
 }
 
 impl<A: ?Sized + RawVec> AsRef<[A::Item]> for GenericVec<A> {
-    fn as_ref(&self) -> &[A::Item] {
-        self
-    }
+    fn as_ref(&self) -> &[A::Item] { self }
 }
 
 impl<A: ?Sized + RawVec> AsMut<[A::Item]> for GenericVec<A> {
-    fn as_mut(&mut self) -> &mut [A::Item] {
-        self
-    }
+    fn as_mut(&mut self) -> &mut [A::Item] { self }
 }
 
 impl<A: ?Sized + RawVec> Borrow<[A::Item]> for GenericVec<A> {
-    fn borrow(&self) -> &[A::Item] {
-        self
-    }
+    fn borrow(&self) -> &[A::Item] { self }
 }
 
 impl<A: ?Sized + RawVec> BorrowMut<[A::Item]> for GenericVec<A> {
-    fn borrow_mut(&mut self) -> &mut [A::Item] {
-        self
-    }
+    fn borrow_mut(&mut self) -> &mut [A::Item] { self }
 }
 
 #[cfg(feature = "nightly")]
@@ -114,9 +96,7 @@ impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
 
 #[cfg(feature = "nightly")]
 impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
-    fn from(array: [T; N]) -> Self {
-        crate::InitArrayVec::<T, N>::new(array)
-    }
+    fn from(array: [T; N]) -> Self { crate::InitArrayVec::<T, N>::new(array) }
 }
 
 impl<A: RawVec + ?Sized, I> Index<I> for GenericVec<A>
@@ -125,16 +105,12 @@ where
 {
     type Output = I::Output;
 
-    fn index(&self, index: I) -> &Self::Output {
-        self.as_slice().index(index)
-    }
+    fn index(&self, index: I) -> &Self::Output { self.as_slice().index(index) }
 }
 
 impl<A: RawVec + ?Sized, I> IndexMut<I> for GenericVec<A>
 where
     I: SliceIndex<[A::Item]>,
 {
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        self.as_mut_slice().index_mut(index)
-    }
+    fn index_mut(&mut self, index: I) -> &mut Self::Output { self.as_mut_slice().index_mut(index) }
 }

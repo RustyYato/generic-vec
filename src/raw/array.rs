@@ -5,44 +5,30 @@ pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
 pub type Array<T, const N: usize> = Init<[T; N]>;
 
 impl<T, const N: usize> UninitArray<T, N> {
-    pub const fn uninit() -> Self {
-        Self(MaybeUninit::uninit())
-    }
+    pub const fn uninit() -> Self { Self(MaybeUninit::uninit()) }
 
-    pub const fn new(array: [T; N]) -> Self {
-        Self(MaybeUninit::new(array))
-    }
+    pub const fn new(array: [T; N]) -> Self { Self(MaybeUninit::new(array)) }
 }
 
 impl<T, const N: usize> Array<T, N> {
-    pub const fn new(array: [T; N]) -> Self {
-        Self(array)
-    }
+    pub const fn new(array: [T; N]) -> Self { Self(array) }
 }
 
 impl<T, const N: usize> Default for UninitArray<T, N> {
-    fn default() -> Self {
-        Self::uninit()
-    }
+    fn default() -> Self { Self::uninit() }
 }
 
 impl<T: Default + Copy, const N: usize> Default for Array<T, N> {
-    fn default() -> Self {
-        Self([T::default(); N])
-    }
+    fn default() -> Self { Self([T::default(); N]) }
 }
 
 impl<T, const N: usize> Clone for UninitArray<T, N> {
-    fn clone(&self) -> Self {
-        Self::default()
-    }
+    fn clone(&self) -> Self { Self::default() }
 }
 
 impl<T: Copy, const N: usize> Copy for Array<T, N> {}
 impl<T: Copy, const N: usize> Clone for Array<T, N> {
-    fn clone(&self) -> Self {
-        *self
-    }
+    fn clone(&self) -> Self { *self }
 }
 
 impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
@@ -59,10 +45,7 @@ impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
     #[inline]
     #[doc(hidden)]
     #[allow(non_snake_case)]
-    fn __with_capacity__const_capacity_checked(
-        capacity: usize,
-        old_capacity: Option<usize>,
-    ) -> Self {
+    fn __with_capacity__const_capacity_checked(capacity: usize, old_capacity: Option<usize>) -> Self {
         match old_capacity {
             Some(old_capacity) if old_capacity <= N => Self::default(),
             _ => Self::with_capacity(capacity),
@@ -76,17 +59,11 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
-    fn capacity(&self) -> usize {
-        N
-    }
+    fn capacity(&self) -> usize { N }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.0.as_ptr().cast()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.0.as_mut_ptr().cast()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(
@@ -119,10 +96,7 @@ impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N> {
     #[inline]
     #[doc(hidden)]
     #[allow(non_snake_case)]
-    fn __with_capacity__const_capacity_checked(
-        capacity: usize,
-        old_capacity: Option<usize>,
-    ) -> Self {
+    fn __with_capacity__const_capacity_checked(capacity: usize, old_capacity: Option<usize>) -> Self {
         match old_capacity {
             Some(old_capacity) if old_capacity <= N => Self::default(),
             _ => Self::with_capacity(capacity),
@@ -136,17 +110,11 @@ unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
     type Item = T;
     type BufferItem = T;
 
-    fn capacity(&self) -> usize {
-        N
-    }
+    fn capacity(&self) -> usize { N }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.0.as_ptr().cast()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.0.as_mut_ptr().cast()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(

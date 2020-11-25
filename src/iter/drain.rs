@@ -7,24 +7,18 @@ pub struct Drain<'a, A: ?Sized + RawVec> {
 }
 
 impl<'a, A: ?Sized + RawVec> From<RawDrain<'a, A>> for Drain<'a, A> {
-    fn from(raw: RawDrain<'a, A>) -> Self {
-        Self { raw }
-    }
+    fn from(raw: RawDrain<'a, A>) -> Self { Self { raw } }
 }
 
 impl<A: ?Sized + RawVec> FusedIterator for Drain<'_, A> {}
 
 #[cfg(feature = "nightly")]
 impl<A: ?Sized + RawVec> ExactSizeIterator for Drain<'_, A> {
-    fn is_empty(&self) -> bool {
-        self.raw.is_complete()
-    }
+    fn is_empty(&self) -> bool { self.raw.is_complete() }
 }
 
 impl<A: ?Sized + RawVec> Drop for Drain<'_, A> {
-    fn drop(&mut self) {
-        self.for_each(drop);
-    }
+    fn drop(&mut self) { self.for_each(drop); }
 }
 
 impl<A: ?Sized + RawVec> Iterator for Drain<'_, A> {

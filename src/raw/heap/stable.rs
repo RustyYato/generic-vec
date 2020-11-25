@@ -1,8 +1,6 @@
 use crate::raw::{AllocError, RawVec, RawVecWithCapacity};
 
-use core::alloc::Layout;
-use core::mem::MaybeUninit;
-use core::ptr::NonNull;
+use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
 #[repr(C)]
@@ -23,8 +21,7 @@ impl<T> Drop for Heap<T> {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::new::<T>();
-            let layout =
-                Layout::from_size_align_unchecked(layout.size() * self.capacity, layout.align());
+            let layout = Layout::from_size_align_unchecked(layout.size() * self.capacity, layout.align());
             dealloc(self.ptr.as_ptr().cast(), layout);
         }
     }
@@ -34,36 +31,24 @@ impl<T> Heap<T> {
     pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
-            capacity: if core::mem::size_of::<T>() == 0 {
-                usize::MAX
-            } else {
-                0
-            },
+            capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
         }
     }
 }
 
 impl<T> Default for Heap<T> {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 unsafe impl<T> RawVec for Heap<T> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
+    fn capacity(&self) -> usize { self.capacity }
 
-    fn as_ptr(&self) -> *const Self::Item {
-        self.ptr.as_ptr()
-    }
+    fn as_ptr(&self) -> *const Self::Item { self.ptr.as_ptr() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item {
-        self.ptr.as_ptr()
-    }
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.ptr.as_ptr() }
 
     fn reserve(&mut self, new_capacity: usize) {
         if self.capacity < new_capacity {
@@ -116,18 +101,13 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
 
     // SAFETY: self.align is already known to be valid and alloc_size has been
     // padded already.
-    unsafe {
-        Ok(Layout::from_size_align_unchecked(
-            alloc_size,
-            layout.align(),
-        ))
-    }
+    unsafe { Ok(Layout::from_size_align_unchecked(alloc_size, layout.align())) }
 }
 
 impl<T> RawVecWithCapacity for Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
-            return Self::new();
+            return Self::new()
         }
 
         let layout = repeat(Layout::new::<T>(), capacity).expect("Invalid layout");
@@ -149,20 +129,12 @@ impl<T> RawVecWithCapacity for Heap<T> {
 impl<T> Heap<T> {
     #[cold]
     #[inline(never)]
-    fn reserve_slow(
-        &mut self,
-        new_capacity: usize,
-        on_failure: OnFailure,
-    ) -> Result<(), AllocError> {
+    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> Result<(), AllocError> {
         assert!(new_capacity > self.capacity);
 
         // grow by at least doubling
         let new_capacity = new_capacity
-            .max(
-                self.capacity
-                    .checked_mul(2)
-                    .expect("Could not grow further"),
-            )
+            .max(self.capacity.checked_mul(2).expect("Could not grow further"))
             .max(super::INIT_ALLOC_CAPACITY);
         let layout = repeat(Layout::new::<T>(), new_capacity).expect("Invalid layout");
 
