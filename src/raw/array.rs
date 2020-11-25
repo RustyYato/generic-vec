@@ -31,7 +31,7 @@ impl<T: Copy, const N: usize> Clone for Array<T, N> {
     fn clone(&self) -> Self { *self }
 }
 
-impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
+unsafe impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
@@ -82,7 +82,7 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
 }
 
 unsafe impl<T: Copy, const N: usize> crate::raw::RawVecInit for Array<T, N> {}
-impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N> {
+unsafe impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,

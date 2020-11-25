@@ -104,7 +104,7 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
     unsafe { Ok(Layout::from_size_align_unchecked(alloc_size, layout.align())) }
 }
 
-impl<T> RawVecWithCapacity for Heap<T> {
+unsafe impl<T> RawVecWithCapacity for Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::new()

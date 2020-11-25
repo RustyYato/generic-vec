@@ -80,7 +80,7 @@ unsafe impl<T, A: ?Sized + AllocRef> RawVec for Heap<T, A> {
     }
 }
 
-impl<T, A: Default + AllocRef> RawVecWithCapacity for Heap<T, A> {
+unsafe impl<T, A: Default + AllocRef> RawVecWithCapacity for Heap<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::default()
