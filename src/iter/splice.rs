@@ -19,6 +19,7 @@ impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> 
 
         #[cfg(not(feature = "alloc"))]
         {
+            /// TODO: use a temporary `SliceVec` and a loop to insert into the vec, may move multiple times!
             for _ in self.replace_with.by_ref() {
                 panic!(
                     "Tried to splice in an iterator larger than the given range! This requires an allocator to work."
