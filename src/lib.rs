@@ -175,7 +175,7 @@ impl<T, const N: usize> ArrayVec<T, N> {
         Self {
             len: 0,
             mark: PhantomData,
-            storage: raw::UninitArray::new(array),
+            storage: raw::UninitArray::with_array(array),
         }
     }
 

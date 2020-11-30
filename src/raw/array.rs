@@ -14,7 +14,7 @@ impl<T, const N: usize> UninitArray<T, N> {
     pub const fn uninit() -> Self { Self(MaybeUninit::uninit()) }
 
     /// Create a new uninitialized array storage, with the given array
-    pub const fn new(array: [T; N]) -> Self { Self(MaybeUninit::new(array)) }
+    pub const fn with_array(array: [T; N]) -> Self { Self(MaybeUninit::new(array)) }
 }
 
 impl<T, const N: usize> Array<T, N> {
