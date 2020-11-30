@@ -1,3 +1,10 @@
+macro_rules! doc_heap {
+    ($($items:tt)*) => {
+        /// Heap
+        $($items)*
+    }
+}
+
 #[cfg(feature = "nightly")]
 mod nightly;
 #[cfg(not(feature = "nightly"))]

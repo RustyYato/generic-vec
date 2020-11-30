@@ -1,4 +1,4 @@
-use crate::{GenericVec, RawVec};
+use crate::{GenericVec, Storage};
 #[cfg(feature = "nightly")]
 use core::iter::TrustedLen;
 use core::{
@@ -7,19 +7,20 @@ use core::{
     ptr,
 };
 
-pub struct IntoIter<A: ?Sized + RawVec> {
+/// This struct is created by the into_iter method on [`GenericVec`] (provided by the [`IntoIterator`] trait).
+pub struct IntoIter<A: ?Sized + Storage> {
     index: usize,
     vec: ManuallyDrop<GenericVec<A>>,
 }
 
-impl<A: ?Sized + RawVec> Drop for IntoIter<A> {
+impl<A: ?Sized + Storage> Drop for IntoIter<A> {
     fn drop(&mut self) {
         unsafe {
             // TODO: handle panics
 
-            struct DropAlloc<'a, A: ?Sized + RawVec>(&'a mut GenericVec<A>);
+            struct DropAlloc<'a, A: ?Sized + Storage>(&'a mut GenericVec<A>);
 
-            impl<A: ?Sized + RawVec> Drop for DropAlloc<'_, A> {
+            impl<A: ?Sized + Storage> Drop for DropAlloc<'_, A> {
                 fn drop(&mut self) {
                     unsafe {
                         ptr::drop_in_place(&mut self.0.raw);
@@ -35,7 +36,7 @@ impl<A: ?Sized + RawVec> Drop for IntoIter<A> {
     }
 }
 
-impl<A: RawVec> IntoIterator for GenericVec<A> {
+impl<A: Storage> IntoIterator for GenericVec<A> {
     type IntoIter = IntoIter<A>;
     type Item = A::Item;
 
@@ -47,30 +48,30 @@ impl<A: RawVec> IntoIterator for GenericVec<A> {
     }
 }
 
-impl<'a, A: ?Sized + RawVec> IntoIterator for &'a mut GenericVec<A> {
+impl<'a, A: ?Sized + Storage> IntoIterator for &'a mut GenericVec<A> {
     type IntoIter = core::slice::IterMut<'a, A::Item>;
     type Item = &'a mut A::Item;
 
     fn into_iter(self) -> Self::IntoIter { self.iter_mut() }
 }
 
-impl<'a, A: ?Sized + RawVec> IntoIterator for &'a GenericVec<A> {
+impl<'a, A: ?Sized + Storage> IntoIterator for &'a GenericVec<A> {
     type IntoIter = core::slice::Iter<'a, A::Item>;
     type Item = &'a A::Item;
 
     fn into_iter(self) -> Self::IntoIter { self.iter() }
 }
 
-impl<A: ?Sized + RawVec> FusedIterator for IntoIter<A> {}
-impl<A: ?Sized + RawVec> ExactSizeIterator for IntoIter<A> {
+impl<A: ?Sized + Storage> FusedIterator for IntoIter<A> {}
+impl<A: ?Sized + Storage> ExactSizeIterator for IntoIter<A> {
     #[cfg(feature = "nightly")]
     fn is_empty(&self) -> bool { self.index == self.vec.len() }
 }
 
 #[cfg(feature = "nightly")]
-unsafe impl<A: ?Sized + RawVec> TrustedLen for IntoIter<A> {}
+unsafe impl<A: ?Sized + Storage> TrustedLen for IntoIter<A> {}
 
-impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {
+impl<A: ?Sized + Storage> Iterator for IntoIter<A> {
     type Item = A::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -110,7 +111,7 @@ impl<A: ?Sized + RawVec> Iterator for IntoIter<A> {
     }
 }
 
-impl<A: ?Sized + RawVec> DoubleEndedIterator for IntoIter<A> {
+impl<A: ?Sized + Storage> DoubleEndedIterator for IntoIter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index == self.vec.len() {
             None

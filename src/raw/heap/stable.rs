@@ -1,12 +1,14 @@
-use crate::raw::{AllocError, RawVec, RawVecWithCapacity};
+use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
 use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
-#[repr(C)]
-pub struct Heap<T> {
-    capacity: usize,
-    ptr: NonNull<T>,
+doc_heap! {
+    #[repr(C)]
+    pub struct Heap<T> {
+        capacity: usize,
+        ptr: NonNull<T>,
+    }
 }
 
 unsafe impl<T> Send for Heap<T> {}
@@ -28,6 +30,7 @@ impl<T> Drop for Heap<T> {
 }
 
 impl<T> Heap<T> {
+    /// Create a new zero-capacity heap vector
     pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
@@ -40,7 +43,7 @@ impl<T> Default for Heap<T> {
     fn default() -> Self { Self::new() }
 }
 
-unsafe impl<T> RawVec for Heap<T> {
+unsafe impl<T> Storage for Heap<T> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
@@ -104,7 +107,7 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
     unsafe { Ok(Layout::from_size_align_unchecked(alloc_size, layout.align())) }
 }
 
-unsafe impl<T> RawVecWithCapacity for Heap<T> {
+impl<T> StorageWithCapacity for Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::new()

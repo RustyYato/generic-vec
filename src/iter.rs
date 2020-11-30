@@ -1,3 +1,5 @@
+//! The [`Iterator`] types that can be created from a [`GenericVec`]
+
 mod drain;
 mod drain_filter;
 mod into_iter;
@@ -12,9 +14,9 @@ pub use splice::Splice;
 
 use core::iter::FromIterator;
 
-use crate::{raw::RawVecWithCapacity, GenericVec};
+use crate::{raw::StorageWithCapacity, GenericVec};
 
-impl<V, A: RawVecWithCapacity> FromIterator<V> for GenericVec<A>
+impl<V, A: StorageWithCapacity> FromIterator<V> for GenericVec<A>
 where
     Self: Extend<V>,
 {
@@ -25,8 +27,9 @@ where
     }
 }
 
-impl<A: ?Sized + crate::raw::RawVec> Extend<A::Item> for GenericVec<A> {
+impl<A: ?Sized + crate::raw::Storage> Extend<A::Item> for GenericVec<A> {
     fn extend<T: IntoIterator<Item = A::Item>>(&mut self, iter: T) {
+        #[allow(clippy::drop_ref)]
         iter.into_iter().for_each(|item| drop(self.push(item)));
     }
 }

@@ -12,6 +12,14 @@
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
 #![allow(unused_unsafe)]
+#![forbid(missing_docs)]
+
+//! generic-vec
+//!
+//! A vector that can store items anywhere: in slices, arrays, or the heap!
+//!
+//!
+//!
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -30,7 +38,7 @@ mod set_len;
 pub mod iter;
 pub mod raw;
 
-use raw::RawVec;
+use raw::Storage;
 
 /// A heap backed vector with a growable capacity
 #[cfg(feature = "alloc")]
@@ -83,13 +91,13 @@ macro_rules! uninit_array {
 /// A vector type that can be backed up by a variety of different backends
 /// including slices, arrays, and the heap.
 #[repr(C)]
-pub struct GenericVec<A: ?Sized + RawVec> {
+pub struct GenericVec<A: ?Sized + Storage> {
     mark: PhantomData<A::Item>,
     len: usize,
     raw: A,
 }
 
-impl<A: ?Sized + RawVec> Deref for GenericVec<A> {
+impl<A: ?Sized + Storage> Deref for GenericVec<A> {
     type Target = [A::Item];
 
     fn deref(&self) -> &Self::Target {
@@ -98,18 +106,18 @@ impl<A: ?Sized + RawVec> Deref for GenericVec<A> {
     }
 }
 
-impl<A: ?Sized + RawVec> DerefMut for GenericVec<A> {
+impl<A: ?Sized + Storage> DerefMut for GenericVec<A> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         let len = self.len();
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
     }
 }
 
-impl<A: ?Sized + RawVec> Drop for GenericVec<A> {
+impl<A: ?Sized + Storage> Drop for GenericVec<A> {
     fn drop(&mut self) { unsafe { ptr::drop_in_place(self.as_mut_slice()) } }
 }
 
-impl<A: RawVec> GenericVec<A> {
+impl<A: Storage> GenericVec<A> {
     /// Create a new empty GenericVec with the given backend
     pub fn with_raw(raw: A) -> Self {
         Self {
@@ -120,7 +128,7 @@ impl<A: RawVec> GenericVec<A> {
     }
 }
 
-impl<A: raw::RawVecWithCapacity> GenericVec<A> {
+impl<A: raw::StorageWithCapacity> GenericVec<A> {
     /// Create a new empty GenericVec with the backend with at least the given capacity
     pub fn with_capacity(capacity: usize) -> Self { Self::with_raw(A::with_capacity(capacity)) }
 
@@ -189,7 +197,7 @@ impl<'a, T: Copy> InitSliceVec<'a, T> {
     }
 }
 
-impl<A: ?Sized + RawVec> GenericVec<A> {
+impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns a shared raw pointer to the vector's buffer.
     ///
     /// It's not safe to write to this pointer except for values
@@ -231,7 +239,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// Set the length of a vector
     pub fn set_len(&mut self, len: usize)
     where
-        A: raw::RawVecInit,
+        A: raw::StorageInit,
     {
         unsafe {
             assert!(
@@ -315,11 +323,11 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    // Grows the `GenericVec` in-place by additional elements.
-    //
-    // This method requires `T` to implement `Clone`, in order to be able to clone
-    // the passed value. If you need more flexibility (or want to rely on Default instead of `Clone`),
-    // use [`GenericVec::grow_with`].
+    /// Grows the `GenericVec` in-place by additional elements.
+    ///
+    /// This method requires `T` to implement `Clone`, in order to be able to clone
+    /// the passed value. If you need more flexibility (or want to rely on Default instead of `Clone`),
+    /// use [`GenericVec::grow_with`].
     pub fn grow(&mut self, additional: usize, value: A::Item)
     where
         A::Item: Clone,
@@ -328,12 +336,12 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         unsafe { extension::Extension::grow(self, additional, value) }
     }
 
-    // Grows the `GenericVec` in-place by additional elements.
-    //
-    // This method uses a closure to create new values on every push.
-    // If you'd rather `Clone` a given value, use `GenericVec::resize`.
-    // If you want to use the `Default` trait to generate values, you
-    // can pass `Default::default` as the second argument.
+    /// Grows the `GenericVec` in-place by additional elements.
+    ///
+    /// This method uses a closure to create new values on every push.
+    /// If you'd rather `Clone` a given value, use `GenericVec::resize`.
+    /// If you want to use the `Default` trait to generate values, you
+    /// can pass `Default::default` as the second argument.
     pub fn grow_with<F>(&mut self, additional: usize, mut value: F)
     where
         F: FnMut() -> A::Item,
@@ -353,9 +361,9 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
         }
     }
 
-    // Clears the vector, removing all values.
-    //
-    // Note that this method has no effect on the allocated capacity of the vector.
+    /// Clears the vector, removing all values.
+    ///
+    /// Note that this method has no effect on the allocated capacity of the vector.
     pub fn clear(&mut self) { self.truncate(0); }
 
     /// Appends an element to the back of a collection.
@@ -584,7 +592,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// Guaranteed to not panic/abort/allocate
     #[cfg(feature = "nightly")]
     pub fn try_pop_array<const N: usize>(&mut self) -> Option<[A::Item; N]> {
-        if self.len() == 0 {
+        if self.is_empty() {
             None
         } else {
             unsafe { Some(self.pop_array_unchecked()) }
@@ -641,9 +649,8 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     ///
     /// the collection must not be full
     pub unsafe fn push_unchecked(&mut self, value: A::Item) -> &mut A::Item {
-        match A::CONST_CAPACITY {
-            Some(0) => panic!("Tried to push an element into a zero-capacity vector!"),
-            _ => (),
+        if Some(0) == A::CONST_CAPACITY {
+            panic!("Tried to push an element into a zero-capacity vector!")
         }
 
         debug_assert_ne!(
@@ -693,9 +700,8 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// * hte index must be in bounds
     pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
         unsafe {
-            match A::CONST_CAPACITY {
-                Some(0) => panic!("Tried to insert an element into a zero-capacity vector!"),
-                _ => (),
+            if Some(0) == A::CONST_CAPACITY {
+                panic!("Tried to insert an element into a zero-capacity vector!")
             }
 
             let len = self.len();
@@ -747,9 +753,8 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     ///
     /// the collection must not be empty
     pub unsafe fn pop_unchecked(&mut self) -> A::Item {
-        match A::CONST_CAPACITY {
-            Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
-            _ => (),
+        if Some(0) == A::CONST_CAPACITY {
+            panic!("Tried to remove an element from a zero-capacity vector!")
         }
 
         let len = self.len();
@@ -799,9 +804,8 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// index must be in bounds
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
-            match A::CONST_CAPACITY {
-                Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
-                _ => (),
+            if Some(0) == A::CONST_CAPACITY {
+                panic!("Tried to remove an element from a zero-capacity vector!")
             }
 
             let len = self.len();
@@ -870,9 +874,8 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// the `index` must be in bounds
     pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
         unsafe {
-            match A::CONST_CAPACITY {
-                Some(0) => panic!("Tried to remove an element from a zero-capacity vector!"),
-                _ => (),
+            if Some(0) == A::CONST_CAPACITY {
+                panic!("Tried to remove an element from a zero-capacity vector!")
             }
 
             let len = self.len();
@@ -893,7 +896,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// with its previous capacity unchanged.
     pub fn split_off<B>(&mut self, index: usize) -> GenericVec<B>
     where
-        B: raw::RawVecWithCapacity<Item = A::Item>,
+        B: raw::StorageWithCapacity<Item = A::Item>,
     {
         assert!(
             index <= self.len(),
@@ -917,7 +920,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     /// with its previous capacity unchanged.
     pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<B>)
     where
-        B: raw::RawVec<Item = A::Item> + ?Sized,
+        B: raw::Storage<Item = A::Item> + ?Sized,
     {
         assert!(
             index <= self.len(),
@@ -935,13 +938,21 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     }
 
     /// Convert the backing buffer type, and moves all the elements in `self` to the new vector
-    pub fn convert<B: raw::RawVecWithCapacity<Item = A::Item>>(mut self) -> GenericVec<B>
+    pub fn convert<B: raw::StorageWithCapacity<Item = A::Item>>(mut self) -> GenericVec<B>
     where
         A: Sized,
     {
         self.split_off(0)
     }
 
+    /// Creates a raw drain that can be used to remove elements in the specified range.
+    /// Usage of [`RawDrain`] is `unsafe` because it doesn't do any checks because is
+    /// meant to be a low level tool to implement fancier iterators, like [`GenericVec::drain`],
+    /// [`GenericVec::drain_filter`], or [`GenericVec::splice`].
+    ///
+    /// # Panic
+    ///
+    /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
     #[inline]
     pub fn raw_drain<R>(&mut self, range: R) -> RawDrain<'_, A>
     where

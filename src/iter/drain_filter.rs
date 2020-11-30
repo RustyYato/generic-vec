@@ -1,10 +1,11 @@
-use crate::{RawDrain, RawVec};
+use crate::{RawDrain, Storage};
 
 use core::iter::FusedIterator;
 
+/// This struct is created by [`GenericVec::drain_filter`]. See its documentation for more.
 pub struct DrainFilter<'a, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
     raw: RawDrain<'a, A>,
@@ -13,15 +14,15 @@ where
 
 impl<'a, A, F> DrainFilter<'a, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
-    pub fn new(raw: RawDrain<'a, A>, filter: F) -> Self { Self { raw, filter } }
+    pub(crate) fn new(raw: RawDrain<'a, A>, filter: F) -> Self { Self { raw, filter } }
 }
 
 impl<A, F> Drop for DrainFilter<'_, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
     fn drop(&mut self) { self.for_each(drop); }
@@ -29,13 +30,13 @@ where
 
 impl<A, F> FusedIterator for DrainFilter<'_, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
 }
 impl<A, F> Iterator for DrainFilter<'_, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
     type Item = A::Item;
@@ -65,7 +66,7 @@ where
 
 impl<A, F> DoubleEndedIterator for DrainFilter<'_, A, F>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     F: FnMut(&mut A::Item) -> bool,
 {
     fn next_back(&mut self) -> Option<Self::Item> {

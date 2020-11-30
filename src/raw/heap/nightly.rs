@@ -1,4 +1,4 @@
-use crate::raw::{AllocError, RawVec, RawVecWithCapacity};
+use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
 use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 use std::alloc::handle_alloc_error;
@@ -6,11 +6,13 @@ use std::alloc::handle_alloc_error;
 #[cfg(feature = "nightly")]
 use std::alloc::{AllocRef, Global};
 
-#[repr(C)]
-pub struct Heap<T, A: ?Sized + AllocRef = Global> {
-    capacity: usize,
-    ptr: NonNull<T>,
-    alloc: A,
+doc_heap! {
+    #[repr(C)]
+    pub struct Heap<T, A: ?Sized + AllocRef = Global> {
+        capacity: usize,
+        ptr: NonNull<T>,
+        alloc: A,
+    }
 }
 
 unsafe impl<T, A: AllocRef + Send> Send for Heap<T, A> {}
@@ -32,6 +34,7 @@ impl<T, A: ?Sized + AllocRef> Drop for Heap<T, A> {
 }
 
 impl<T> Heap<T> {
+    /// Create a new zero-capacity heap vector
     pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
@@ -42,6 +45,7 @@ impl<T> Heap<T> {
 }
 
 impl<T, A: AllocRef> Heap<T, A> {
+    /// Create a new zero-capacity heap vector with the given allocator
     pub fn with_alloc(alloc: A) -> Self {
         Self {
             ptr: NonNull::dangling(),
@@ -55,7 +59,7 @@ impl<T, A: AllocRef + Default> Default for Heap<T, A> {
     fn default() -> Self { Self::with_alloc(Default::default()) }
 }
 
-unsafe impl<T, A: ?Sized + AllocRef> RawVec for Heap<T, A> {
+unsafe impl<T, A: ?Sized + AllocRef> Storage for Heap<T, A> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
@@ -80,7 +84,7 @@ unsafe impl<T, A: ?Sized + AllocRef> RawVec for Heap<T, A> {
     }
 }
 
-unsafe impl<T, A: Default + AllocRef> RawVecWithCapacity for Heap<T, A> {
+impl<T, A: Default + AllocRef> StorageWithCapacity for Heap<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::default()

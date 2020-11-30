@@ -1,11 +1,12 @@
-use crate::{GenericVec, RawVec};
+use crate::{GenericVec, Storage};
 use core::{
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     ptr::NonNull,
 };
 
-pub struct RawDrain<'a, A: ?Sized + RawVec> {
+/// This struct is created by [`GenericVec::raw_drain`]. See its documentation for more.
+pub struct RawDrain<'a, A: ?Sized + Storage> {
     vec: *mut GenericVec<A>,
     old_vec_len: usize,
     write_front: *mut A::Item,
@@ -15,7 +16,7 @@ pub struct RawDrain<'a, A: ?Sized + RawVec> {
     mark: PhantomData<&'a mut GenericVec<A>>,
 }
 
-impl<A: ?Sized + RawVec> Drop for RawDrain<'_, A> {
+impl<A: ?Sized + Storage> Drop for RawDrain<'_, A> {
     fn drop(&mut self) {
         unsafe {
             self.skip_n_front(self.remaining());
@@ -96,12 +97,12 @@ pub(crate) fn check_range<R: RangeBounds<usize>>(len: usize, range: R) -> core::
     start..end
 }
 
-impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
+impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     pub(crate) const IS_ZS: bool = core::mem::size_of::<A::Item>() == 0;
     const ZS_PTR: *mut A::Item = NonNull::<A::Item>::dangling().as_ptr();
 
     #[inline]
-    pub fn new<R>(vec: &'a mut GenericVec<A>, range: R) -> Self
+    pub(crate) fn new<R>(vec: &'a mut GenericVec<A>, range: R) -> Self
     where
         R: RangeBounds<usize>,
     {
@@ -143,6 +144,9 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// The number of remaining elements in range of this `RawDrain`
+    ///
+    /// The `RawDrain` is complete when there are 0 remaining elements
     #[inline]
     pub fn remaining(&self) -> usize {
         if Self::IS_ZS {
@@ -152,9 +156,17 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Returns `true` if the `RawDrain` is complete
     #[inline]
     pub fn is_complete(&self) -> bool { self.read_back == self.read_front }
 
+    /// Returns a reference to the next element if the `RawDrain`
+    ///
+    /// Note: this does *not* advance the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn front(&mut self) -> &mut A::Item {
         if Self::IS_ZS {
@@ -164,6 +176,13 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Returns a reference to the last element if the `RawDrain`
+    ///
+    /// Note: this does *not* advance the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn back(&mut self) -> &mut A::Item {
         if Self::IS_ZS {
@@ -173,6 +192,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Removes the next element of the `RawDrain`, and the underlying [`GenericVec`]
+    /// and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn take_front(&mut self) -> A::Item {
         debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
@@ -189,6 +214,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Removes the last element of the `RawDrain`, and the underlying [`GenericVec`]
+    /// and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn take_back(&mut self) -> A::Item {
         debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
@@ -204,6 +235,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Skips the next element of the `RawDrain`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn skip_front(&mut self) {
         debug_assert!(!self.is_complete(), "Cannot skip from a complete RawDrain");
@@ -221,6 +258,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Skips the last element of the `RawDrain`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be complete
     #[inline]
     pub unsafe fn skip_back(&mut self) {
         debug_assert!(!self.is_complete(), "Cannot skip from a complete RawDrain");
@@ -238,6 +281,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Skips the next `n` elements of the `RawDrain`, and keeps them in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` have at least n remaining elements
     #[inline]
     pub unsafe fn skip_n_front(&mut self, n: usize) {
         debug_assert!(self.remaining() >= n);
@@ -256,6 +305,12 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    /// Skips the last `n` elements of the `RawDrain`, and keeps them in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` have at least n remaining elements
     #[inline]
     pub unsafe fn skip_n_back(&mut self, n: usize) {
         debug_assert!(self.remaining() >= n);
@@ -274,6 +329,51 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
+    // TODO: this doc is bad, improve it
+    /// Write the value into empty space at the front of the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must have taken at least 1 more element than it has
+    /// written from the front
+    pub unsafe fn consume_write_front(&mut self, value: A::Item) {
+        if Self::IS_ZS {
+            core::mem::forget(value);
+            self.write_front = (self.write_front as usize).wrapping_add(1) as _;
+        } else {
+            unsafe {
+                self.write_front.write(value);
+                self.write_front = self.write_front.add(1);
+            }
+        }
+    }
+
+    // TODO: this doc is bad, improve it
+    /// Write the value into empty space at the back of the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must have taken at least 1 more element than it has
+    /// written from the back
+    pub unsafe fn consume_write_back(&mut self, value: A::Item) {
+        if Self::IS_ZS {
+            core::mem::forget(value);
+            self.write_back = (self.write_back as usize).wrapping_sub(1) as _;
+        } else {
+            unsafe {
+                self.write_back = self.write_back.sub(1);
+                self.write_back.write(value);
+            }
+        }
+    }
+
+    // TODO: this doc is bad, improve it
+    /// Write the slice into empty space at the front of the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must have taken at least `slice.len()` more element than it has
+    /// written from the front
     pub unsafe fn consume_write_slice_front(&mut self, slice: &[A::Item]) {
         unsafe {
             if Self::IS_ZS {
@@ -285,7 +385,35 @@ impl<'a, A: ?Sized + RawVec> RawDrain<'a, A> {
         }
     }
 
-    pub fn assert_space(&mut self, space: usize) {
+    // TODO: this doc is bad, improve it
+    /// Write the slice into empty space at the back of the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must have taken at least `slice.len()` more element than it has
+    /// written from the back
+    pub unsafe fn consume_write_slice_back(&mut self, slice: &[A::Item]) {
+        unsafe {
+            if Self::IS_ZS {
+                self.write_back = (self.write_back as usize).wrapping_sub(slice.len()) as _;
+            } else {
+                self.write_back = self.write_back.sub(slice.len());
+                self.write_back.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+            }
+        }
+    }
+
+    /// Assert that there is at least `space` elements of room left to write into
+    /// the `RawDrain`, and the underlying [`GenericVec`]
+    ///
+    /// # Safety
+    ///
+    /// the `RawDrain` must be complete
+    pub unsafe fn assert_space(&mut self, space: usize) {
+        debug_assert!(
+            self.is_complete(),
+            "You can only call `assert_space` on a complete `RawDrain`, this is UB in release mode!"
+        );
         unsafe {
             if Self::IS_ZS {
                 let write_space = (self.write_back as usize).wrapping_sub(self.write_front as usize);

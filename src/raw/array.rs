@@ -1,16 +1,21 @@
-use crate::raw::{Init, RawVec, RawVecWithCapacity, Uninit};
+use crate::raw::{Init, Storage, StorageWithCapacity, Uninit};
 use core::{alloc::AllocError, mem::MaybeUninit};
 
+/// An uninitialized array storage
 pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
+/// An initialized array storage
 pub type Array<T, const N: usize> = Init<[T; N]>;
 
 impl<T, const N: usize> UninitArray<T, N> {
+    /// Create a new uninitialized array storage
     pub const fn uninit() -> Self { Self(MaybeUninit::uninit()) }
 
+    /// Create a new uninitialized array storage, with the given array
     pub const fn new(array: [T; N]) -> Self { Self(MaybeUninit::new(array)) }
 }
 
 impl<T, const N: usize> Array<T, N> {
+    /// Create a new initialized array storage, with the given array
     pub const fn new(array: [T; N]) -> Self { Self(array) }
 }
 
@@ -31,11 +36,11 @@ impl<T: Copy, const N: usize> Clone for Array<T, N> {
     fn clone(&self) -> Self { *self }
 }
 
-unsafe impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
+impl<T, const N: usize> StorageWithCapacity for UninitArray<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
-            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> RawVec",
+            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> Storage",
             N,
         );
 
@@ -53,7 +58,7 @@ unsafe impl<T, const N: usize> RawVecWithCapacity for UninitArray<T, N> {
     }
 }
 
-unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
+unsafe impl<T, const N: usize> Storage for UninitArray<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;
@@ -81,12 +86,12 @@ unsafe impl<T, const N: usize> RawVec for UninitArray<T, N> {
     }
 }
 
-unsafe impl<T: Copy, const N: usize> crate::raw::RawVecInit for Array<T, N> {}
-unsafe impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N> {
+unsafe impl<T: Copy, const N: usize> crate::raw::StorageInit for Array<T, N> {}
+impl<T: Default + Copy, const N: usize> StorageWithCapacity for Array<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
-            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> RawVec",
+            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> Storage",
             N,
         );
 
@@ -104,7 +109,7 @@ unsafe impl<T: Default + Copy, const N: usize> RawVecWithCapacity for Array<T, N
     }
 }
 
-unsafe impl<T: Copy, const N: usize> RawVec for Array<T, N> {
+unsafe impl<T: Copy, const N: usize> Storage for Array<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
     type Item = T;

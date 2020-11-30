@@ -1,19 +1,20 @@
-use crate::{RawDrain, RawVec};
+use crate::{RawDrain, Storage};
 
+/// This struct is created by [`GenericVec::splice`]. See its documentation for more.
 pub struct Splice<'a, A, I>
 where
-    A: ?Sized + RawVec,
+    A: ?Sized + Storage,
     I: Iterator<Item = A::Item>,
 {
     raw: RawDrain<'a, A>,
     replace_with: I,
 }
 
-impl<'a, A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Splice<'a, A, I> {
-    pub fn new(raw: RawDrain<'a, A>, replace_with: I) -> Self { Self { raw, replace_with } }
+impl<'a, A: ?Sized + Storage, I: Iterator<Item = A::Item>> Splice<'a, A, I> {
+    pub(crate) fn new(raw: RawDrain<'a, A>, replace_with: I) -> Self { Self { raw, replace_with } }
 }
 
-impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> {
+impl<A: ?Sized + Storage, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> {
     fn drop(&mut self) {
         self.for_each(drop);
 
@@ -58,7 +59,7 @@ impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> 
     }
 }
 
-impl<'a, A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Iterator for Splice<'a, A, I> {
+impl<'a, A: ?Sized + Storage, I: Iterator<Item = A::Item>> Iterator for Splice<'a, A, I> {
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {

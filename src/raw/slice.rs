@@ -1,11 +1,13 @@
-use crate::raw::{AllocError, Init, RawVec, Uninit};
+use crate::raw::{AllocError, Init, Storage, Uninit};
 
 use core::mem::MaybeUninit;
 
+/// An uninitialized slice storage
 pub type UninitSlice<'a, T> = Uninit<&'a mut [MaybeUninit<T>]>;
+/// An initialized slice storage, can only store `Copy` types
 pub type Slice<'a, T> = Init<&'a mut [T]>;
 
-unsafe impl<T> RawVec for UninitSlice<'_, T> {
+unsafe impl<T> Storage for UninitSlice<'_, T> {
     type Item = T;
     type BufferItem = MaybeUninit<T>;
 
@@ -31,8 +33,8 @@ unsafe impl<T> RawVec for UninitSlice<'_, T> {
     }
 }
 
-unsafe impl<T: Copy> crate::raw::RawVecInit for Slice<'_, T> {}
-unsafe impl<T: Copy> RawVec for Slice<'_, T> {
+unsafe impl<T: Copy> crate::raw::StorageInit for Slice<'_, T> {}
+unsafe impl<T: Copy> Storage for Slice<'_, T> {
     type Item = T;
     type BufferItem = T;
 

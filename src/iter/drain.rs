@@ -1,27 +1,28 @@
-use crate::{RawDrain, RawVec};
+use crate::{RawDrain, Storage};
 
 use core::iter::FusedIterator;
 
-pub struct Drain<'a, A: ?Sized + RawVec> {
+/// This struct is created by [`GenericVec::drain`]. See its documentation for more.
+pub struct Drain<'a, A: ?Sized + Storage> {
     raw: RawDrain<'a, A>,
 }
 
-impl<'a, A: ?Sized + RawVec> From<RawDrain<'a, A>> for Drain<'a, A> {
+impl<'a, A: ?Sized + Storage> From<RawDrain<'a, A>> for Drain<'a, A> {
     fn from(raw: RawDrain<'a, A>) -> Self { Self { raw } }
 }
 
-impl<A: ?Sized + RawVec> FusedIterator for Drain<'_, A> {}
+impl<A: ?Sized + Storage> FusedIterator for Drain<'_, A> {}
 
 #[cfg(feature = "nightly")]
-impl<A: ?Sized + RawVec> ExactSizeIterator for Drain<'_, A> {
+impl<A: ?Sized + Storage> ExactSizeIterator for Drain<'_, A> {
     fn is_empty(&self) -> bool { self.raw.is_complete() }
 }
 
-impl<A: ?Sized + RawVec> Drop for Drain<'_, A> {
+impl<A: ?Sized + Storage> Drop for Drain<'_, A> {
     fn drop(&mut self) { self.for_each(drop); }
 }
 
-impl<A: ?Sized + RawVec> Iterator for Drain<'_, A> {
+impl<A: ?Sized + Storage> Iterator for Drain<'_, A> {
     type Item = A::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -38,7 +39,7 @@ impl<A: ?Sized + RawVec> Iterator for Drain<'_, A> {
     }
 }
 
-impl<A: ?Sized + RawVec> DoubleEndedIterator for Drain<'_, A> {
+impl<A: ?Sized + Storage> DoubleEndedIterator for Drain<'_, A> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.raw.is_complete() {
             None
