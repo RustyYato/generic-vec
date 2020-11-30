@@ -1,5 +1,7 @@
 #[cfg(feature = "nightly")]
 pub use core::alloc::AllocError;
+#[cfg(feature = "alloc")]
+use std::boxed::Box;
 
 #[cfg(not(feature = "nightly"))]
 pub struct AllocError;
@@ -62,9 +64,9 @@ unsafe impl<T: ?Sized + RawVec> RawVec for &mut T {
 }
 
 #[cfg(feature = "alloc")]
-unsafe impl<T: ?Sized + RawVecInit> RawVecInit for std::boxed::Box<T> {}
+unsafe impl<T: ?Sized + RawVecInit> RawVecInit for Box<T> {}
 #[cfg(feature = "alloc")]
-unsafe impl<T: ?Sized + RawVec> RawVec for std::boxed::Box<T> {
+unsafe impl<T: ?Sized + RawVec> RawVec for Box<T> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = T::CONST_CAPACITY;
     type Item = T::Item;
@@ -78,7 +80,7 @@ unsafe impl<T: ?Sized + RawVec> RawVec for std::boxed::Box<T> {
 }
 
 #[cfg(feature = "alloc")]
-unsafe impl<T: ?Sized + RawVecWithCapacity> RawVecWithCapacity for std::boxed::Box<T> {
+unsafe impl<T: ?Sized + RawVecWithCapacity> RawVecWithCapacity for Box<T> {
     fn with_capacity(capacity: usize) -> Self { Box::new(T::with_capacity(capacity)) }
 
     #[doc(hidden)]

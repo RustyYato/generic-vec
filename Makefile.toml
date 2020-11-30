@@ -1,0 +1,33 @@
+[tasks.test_no_std]
+command = 'cargo'
+args = ['test', '--no-default-features']
+
+[tasks.test_alloc]
+command = 'cargo'
+args = ['test', '--no-default-features', '--features', 'alloc']
+
+[tasks.test_std]
+command = 'cargo'
+args = ['test', '--no-default-features', '--features', 'std']
+
+[tasks.test_no_std-nightly]
+command = 'cargo'
+args = ['test', '--no-default-features', '--features', 'nightly']
+
+[tasks.test_alloc-nightly]
+command = 'cargo'
+args = ['test', '--no-default-features', '--features', 'alloc,nightly']
+
+[tasks.test_std-nightly]
+command = 'cargo'
+args = ['test', '--no-default-features', '--features', 'std,nightly']
+
+[tasks.test_all]
+dependencies = [
+    'test_no_std',
+    'test_alloc',
+    'test_std',
+    'test_no_std-nightly',
+    'test_alloc-nightly',
+    'test_std-nightly',
+]

@@ -22,7 +22,7 @@ fn consume_extend() {
         let mut other = generic_vec::uninit_array!(4);
         let mut other = SliceVec::new(&mut other);
         other.extend((0..4).map(|x| S!(x)));
-        vec.consume_extend(&mut other);
+        other.split_off_into(0, &mut vec);
         assert_eq!(vec, S!([0, 1, 2, 3]));
         assert_eq!(other, []);
     });

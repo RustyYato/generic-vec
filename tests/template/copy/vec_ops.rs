@@ -21,7 +21,7 @@ fn consume_extend() {
         new_vec!(mut vec, max(4));
         let mut other = [0, 1, 2, 3];
         let mut other = InitSliceVec::new(&mut other);
-        vec.consume_extend(&mut other);
+        other.split_off_into(0, &mut vec);
         assert_eq!(vec, [0, 1, 2, 3]);
         assert_eq!(other, []);
     });

@@ -17,23 +17,41 @@ impl<A: ?Sized + RawVec, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> 
     fn drop(&mut self) {
         self.for_each(drop);
 
+        let Self { raw, replace_with } = self;
+
         #[cfg(not(feature = "alloc"))]
         {
-            /// TODO: use a temporary `SliceVec` and a loop to insert into the vec, may move multiple times!
-            for _ in self.replace_with.by_ref() {
-                panic!(
-                    "Tried to splice in an iterator larger than the given range! This requires an allocator to work."
-                );
+            const CAPACITY: usize = 16;
+
+            let mut buffer = crate::uninit_array!(CAPACITY);
+            let mut buffer = crate::SliceVec::new(&mut buffer);
+
+            replace_with.for_each(|item| unsafe {
+                buffer.push_unchecked(item);
+
+                if !RawDrain::<A>::IS_ZS && buffer.is_full() {
+                    unsafe {
+                        raw.assert_space(buffer.len());
+                        raw.consume_write_slice_front(&buffer);
+                        buffer.set_len_unchecked(0);
+                    }
+                }
+            });
+
+            unsafe {
+                raw.assert_space(buffer.len());
+                raw.consume_write_slice_front(&buffer);
+                core::mem::forget(buffer);
             }
         }
 
         #[cfg(feature = "alloc")]
         {
-            let mut temp: std::vec::Vec<_> = self.replace_with.by_ref().collect();
+            let mut temp: std::vec::Vec<_> = replace_with.collect();
 
             unsafe {
-                self.raw.assert_space(temp.len());
-                self.raw.consume_write_slice_front(&temp);
+                raw.assert_space(temp.len());
+                raw.consume_write_slice_front(&temp);
                 temp.set_len(0);
             }
         }

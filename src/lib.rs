@@ -19,7 +19,7 @@ extern crate alloc as std;
 use core::{
     marker::PhantomData,
     mem::MaybeUninit,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, RangeBounds},
     ptr,
 };
 
@@ -32,45 +32,15 @@ pub mod raw;
 
 use raw::RawVec;
 
-macro_rules! add_docs_to_all_imp {
-    (
-        ($(#[doc = $message:expr])+)
-    ) => {};
-    (
-        ($(#[doc = $message:expr])+)
-        ($(#[$meta:meta])*)
-        $item:item
-        $($rest:tt)*
-    ) => {
-        $(#[doc = $message])+
-        $item
-        add_docs_to_all_imp!{($(#[doc = $message])+)$($rest)*}
-    };
-}
+/// A heap backed vector with a growable capacity
+#[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
+pub type Vec<T, A = std::alloc::Global> = GenericVec<raw::Heap<T, A>>;
 
-macro_rules! add_docs_to_all {
-    (
-        $(#[doc = $message:expr])+
-        $(#[$meta:meta] $item:item)*
-    ) => {
-        add_docs_to_all_imp! {
-            ($(#[doc = $message])+)
-            $((#[$meta]) $item)*
-        }
-    };
-}
-
-add_docs_to_all! {
-    /// A heap backed vector with a growable capacity
-
-    #[cfg(feature = "alloc")]
-    #[cfg(feature = "nightly")]
-    pub type Vec<T, A = std::alloc::Global> = GenericVec<raw::Heap<T, A>>;
-
-    #[cfg(feature = "alloc")]
-    #[cfg(not(feature = "nightly"))]
-    pub type Vec<T> = GenericVec<raw::Heap<T>>;
-}
+/// A heap backed vector with a growable capacity
+#[cfg(feature = "alloc")]
+#[cfg(not(feature = "nightly"))]
+pub type Vec<T> = GenericVec<raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
 #[cfg(feature = "nightly")]
@@ -114,8 +84,8 @@ macro_rules! uninit_array {
 /// including slices, arrays, and the heap.
 #[repr(C)]
 pub struct GenericVec<A: ?Sized + RawVec> {
-    len: usize,
     mark: PhantomData<A::Item>,
+    len: usize,
     raw: A,
 }
 
@@ -233,7 +203,13 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     pub fn len(&self) -> usize { self.len }
 
     /// Returns the number of elements the vector can hold without reallocating or panicing.
-    pub fn capacity(&self) -> usize { self.raw.capacity() }
+    pub fn capacity(&self) -> usize {
+        if core::mem::size_of::<A::Item>() == 0 {
+            isize::MAX as usize
+        } else {
+            self.raw.capacity()
+        }
+    }
 
     /// Returns true if and only if the vector contains no elements.
     pub fn is_empty(&self) -> bool { self.len() == 0 }
@@ -291,7 +267,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     pub fn spare_capacity_mut(&mut self) -> &mut [A::BufferItem] {
         unsafe {
             let len = self.len();
-            let cap = self.raw.capacity();
+            let cap = self.capacity();
             core::slice::from_raw_parts_mut(self.raw.as_mut_ptr().add(len).cast(), cap.wrapping_sub(len))
         }
     }
@@ -969,7 +945,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[inline]
     pub fn raw_drain<R>(&mut self, range: R) -> RawDrain<'_, A>
     where
-        R: core::slice::SliceIndex<[A::Item], Output = [A::Item]>,
+        R: RangeBounds<usize>,
     {
         RawDrain::new(self, range)
     }
@@ -988,7 +964,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[inline]
     pub fn drain<R>(&mut self, range: R) -> Drain<'_, A>
     where
-        R: core::slice::SliceIndex<[A::Item], Output = [A::Item]>,
+        R: RangeBounds<usize>,
     {
         self.raw_drain(range).into()
     }
@@ -1001,7 +977,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[inline]
     pub fn drain_filter<R, F>(&mut self, range: R, f: F) -> DrainFilter<'_, A, F>
     where
-        R: core::slice::SliceIndex<[A::Item], Output = [A::Item]>,
+        R: RangeBounds<usize>,
         F: FnMut(&mut A::Item) -> bool,
     {
         DrainFilter::new(self.raw_drain(range), f)
@@ -1017,7 +993,7 @@ impl<A: ?Sized + RawVec> GenericVec<A> {
     #[inline]
     pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, A, I::IntoIter>
     where
-        R: core::slice::SliceIndex<[A::Item], Output = [A::Item]>,
+        R: RangeBounds<usize>,
         I: IntoIterator<Item = A::Item>,
     {
         Splice::new(self.raw_drain(range), replace_with.into_iter())
