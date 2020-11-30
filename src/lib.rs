@@ -84,6 +84,10 @@ macro_rules! uninit_array {
     };
 
     ($n:expr) => {
+        // Safety
+        //
+        // `MaybeUninit` can represent any bit-pattern, including uninitialized memory
+        // so it's fine to cast uninitialized memory to `[MaybeUninit; N]`
         unsafe { $crate::macros::MaybeUninit::<[$crate::macros::MaybeUninit<_>; $n]>::uninit().assume_init() }
     };
 }
@@ -102,6 +106,8 @@ impl<A: ?Sized + Storage> Deref for GenericVec<A> {
 
     fn deref(&self) -> &Self::Target {
         let len = self.len();
+        // The first `len` elements are guaranteed to be initialized
+        // as part of the guarantee on `self.set_len_unchecked`
         unsafe { core::slice::from_raw_parts(self.as_ptr(), len) }
     }
 }
@@ -109,12 +115,20 @@ impl<A: ?Sized + Storage> Deref for GenericVec<A> {
 impl<A: ?Sized + Storage> DerefMut for GenericVec<A> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         let len = self.len();
+        // The first `len` elements are guaranteed to be initialized
+        // as part of the guarantee on `self.set_len_unchecked`
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
     }
 }
 
 impl<A: ?Sized + Storage> Drop for GenericVec<A> {
-    fn drop(&mut self) { unsafe { ptr::drop_in_place(self.as_mut_slice()) } }
+    fn drop(&mut self) {
+        // The first `len` elements are guaranteed to be initialized
+        // as part of the guarantee on `self.set_len_unchecked`
+        // These elements should be dropped when the `GenericVec` gets dropped/
+        // The storage will clean it's self up on drop
+        unsafe { ptr::drop_in_place(self.as_mut_slice()) }
+    }
 }
 
 impl<A: Storage> GenericVec<A> {
@@ -241,6 +255,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     where
         A: raw::StorageInit,
     {
+        // Safety
+        //
+        // The storage only contains initialized data, and we check that
+        // the given length is smaller than the capacity
         unsafe {
             assert!(
                 len <= self.capacity(),
@@ -273,6 +291,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns the remaining spare capacity of the vector as a slice
     /// of `[MaybeUninit<T>]` or `[T]`
     pub fn spare_capacity_mut(&mut self) -> &mut [A::BufferItem] {
+        // Safety
+        //
+        // The elements from `len..capacity` are guaranteed to be contain
+        // `A::BufferItem`s, as per `Storage`'s safety requirements
         unsafe {
             let len = self.len();
             let cap = self.capacity();
@@ -316,9 +338,17 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Note that this method has no effect on the allocated capacity of the vector.
     pub fn truncate(&mut self, len: usize) {
         if let Some(diff) = self.len().checked_sub(len) {
+            // # Safety
+            //
+            // * the given length is smaller than the current length, so
+            //   all the elements must be initialized
+            // * the elements from `len..self.len()` are valid,
+            //   and should be dropped
             unsafe {
                 self.set_len_unchecked(len);
-                core::slice::from_raw_parts_mut(self.as_mut_ptr().add(len), diff);
+                let ptr = self.as_mut_ptr().add(len);
+                let len = diff;
+                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(ptr, len));
             }
         }
     }
@@ -333,6 +363,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         A::Item: Clone,
     {
         self.reserve(additional);
+        // # Safety
+        //
+        // * we reserved enough space
         unsafe { extension::Extension::grow(self, additional, value) }
     }
 
@@ -346,6 +379,13 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     where
         F: FnMut() -> A::Item,
     {
+        // Safety
+        //
+        // * we reserve enough space for `additional` elements
+        // * we use `SetLenOnDrop` to ensure that the length is will
+        //   correctly set, even on panic
+        // * the `ptr` always stays in bounds
+
         self.reserve(additional);
 
         let mut len = set_len::SetLenOnDrop::new(&mut self.len);
@@ -376,6 +416,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.reserve(1);
         }
 
+        // Safety
+        //
+        // * we reserve enough space for 1 more element
         unsafe { self.push_unchecked(value) }
     }
 
@@ -387,6 +430,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     #[cfg(feature = "nightly")]
     pub fn push_array<const N: usize>(&mut self, value: [A::Item; N]) -> &mut [A::Item; N] {
         self.reserve(N);
+
+        // Safety
+        //
+        // * we reserve enough space for N more elements
         unsafe { self.push_array_unchecked(value) }
     }
 
@@ -409,6 +456,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.reserve(1);
         }
 
+        // Safety
+        //
+        // * we reserve enough space for 1 more element
+        // * we verify that index is in bounds
         unsafe { self.insert_unchecked(index, value) }
     }
 
@@ -429,6 +480,11 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         );
 
         self.reserve(N);
+
+        // Safety
+        //
+        // * we reserve enough space for N more elements
+        // * we verify that index is in bounds
         unsafe { self.insert_array_unchecked(index, value) }
     }
 
@@ -440,6 +496,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     pub fn pop(&mut self) -> A::Item {
         assert_ne!(self.len(), 0, "Tried to pop an element from an empty vector",);
 
+        // Safety
+        //
+        // * we verify we are not empty
         unsafe { self.pop_unchecked() }
     }
 
@@ -457,6 +516,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.len()
         );
 
+        // Safety
+        //
+        // * we verify we have at least N elements
         unsafe { self.pop_array_unchecked() }
     }
 
@@ -474,6 +536,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.len()
         );
 
+        // Safety
+        //
+        // * we verify that the index is in bounds
         unsafe { self.remove_unchecked(index) }
     }
 
@@ -493,6 +558,11 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.len()
         );
 
+        // Safety
+        //
+        // * we verify that the index is in bounds
+        // * we verify that there are at least `N` elements
+        //   after the index
         unsafe { self.remove_array_unchecked(index) }
     }
 
@@ -513,6 +583,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.len()
         );
 
+        // Safety
+        //
+        // * we verify that the index is in bounds
         unsafe { self.swap_remove_unchecked(index) }
     }
 
@@ -524,6 +597,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.is_full() {
             Err(value)
         } else {
+            // Safety
+            //
+            // * we reserve enough space for 1 more element
             unsafe { Ok(self.push_unchecked(value)) }
         }
     }
@@ -538,6 +614,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.remaining_capacity() < N {
             Err(value)
         } else {
+            // Safety
+            //
+            // * we reserve enough space for N more elements
             unsafe { Ok(self.push_array_unchecked(value)) }
         }
     }
@@ -551,6 +630,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.is_full() || index > self.len() {
             Err(value)
         } else {
+            // Safety
+            //
+            // * we reserve enough space for 1 more element
+            // * we verify that index is in bounds
             unsafe { Ok(self.insert_unchecked(index, value)) }
         }
     }
@@ -570,6 +653,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.capacity().wrapping_sub(self.len()) < N || index > self.len() {
             Err(value)
         } else {
+            // Safety
+            //
+            // * we reserve enough space for N more elements
+            // * we verify that index is in bounds
             unsafe { Ok(self.insert_array_unchecked(index, value)) }
         }
     }
@@ -582,6 +669,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.is_empty() {
             None
         } else {
+            // Safety
+            //
+            // * we verify we are not empty
             unsafe { Some(self.pop_unchecked()) }
         }
     }
@@ -595,6 +685,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.is_empty() {
             None
         } else {
+            // Safety
+            //
+            // * we verify we have at least N elements
             unsafe { Some(self.pop_array_unchecked()) }
         }
     }
@@ -608,6 +701,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         if self.len() < index {
             None
         } else {
+            // Safety
+            //
+            // * we verify that the index is in bounds
             unsafe { Some(self.remove_unchecked(index)) }
         }
     }
@@ -621,9 +717,14 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     #[cfg(feature = "nightly")]
     pub fn try_remove_array<const N: usize>(&mut self, index: usize) -> Option<[A::Item; N]> {
         if self.len() < index || self.len().wrapping_sub(index) < N {
-            unsafe { Some(self.remove_array_unchecked(index)) }
-        } else {
             None
+        } else {
+            // Safety
+            //
+            // * we verify that the index is in bounds
+            // * we verify that there are at least `N` elements
+            //   after the index
+            unsafe { Some(self.remove_array_unchecked(index)) }
         }
     }
 
@@ -637,6 +738,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Guaranteed to not panic/abort/allocate
     pub fn try_swap_remove(&mut self, index: usize) -> Option<A::Item> {
         if index < self.len() {
+            // Safety
+            //
+            // * we verify that the index is in bounds
             unsafe { Some(self.swap_remove_unchecked(index)) }
         } else {
             None
@@ -658,6 +762,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.capacity(),
             "Tried to `push_unchecked` past capacity! This is UB in release mode"
         );
+
+        // Safety
+        //
+        // the collection isn't full, so `ptr.add(len)` is valid to write
         unsafe {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(1));
@@ -681,6 +789,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             _ => (),
         }
 
+        // Safety
+        //
+        // the collection has at least N remaining elements of capacity left,
+        // so `ptr.add(len)` is valid to write `N` elements
         unsafe {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(N));
@@ -704,6 +816,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
                 panic!("Tried to insert an element into a zero-capacity vector!")
             }
 
+            // Safety
+            //
+            // * the index is in bounds
+            // * the collection is't full so `ptr.add(len)` is valid to write 1 element
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(1));
             let ptr = self.raw.as_mut_ptr().add(index);
@@ -733,6 +849,11 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             _ => (),
         }
 
+        // Safety
+        //
+        // * the index is in bounds
+        // * the collection has at least N remaining elements of capacity left,
+        //   so `ptr.add(len)` is valid to write `N` elements
         unsafe {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(N));
@@ -762,6 +883,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             len, 0,
             "Tried to `pop_unchecked` an empty array vec! This is UB in release mode"
         );
+
+        // Safety
+        //
+        // * the collection isn't empty, so `ptr.add(len - 1)` is valid to read
         unsafe {
             let len = len.wrapping_sub(1);
             self.set_len_unchecked(len);
@@ -788,6 +913,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             N,
             len,
         );
+        // Safety
+        //
+        // * the collection has at least `N` elements, so `ptr.add(len - N)` is valid to read `N` elements
         unsafe {
             let len = len.wrapping_sub(N);
             self.set_len_unchecked(len);
@@ -803,20 +931,24 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// the collection must not be empty, and
     /// index must be in bounds
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
+        if Some(0) == A::CONST_CAPACITY {
+            panic!("Tried to remove an element from a zero-capacity vector!")
+        }
+
+        let len = self.len();
+
+        debug_assert!(
+            index <= len,
+            "Tried to remove an element at index {} from a {} length vector! This is UB in release mode",
+            index,
+            len,
+        );
+
+        // Safety
+        //
+        // * the index is in bounds
+        // * the collection isn't empty, so `ptr.add(len - index - 1)` is valid to read
         unsafe {
-            if Some(0) == A::CONST_CAPACITY {
-                panic!("Tried to remove an element from a zero-capacity vector!")
-            }
-
-            let len = self.len();
-
-            debug_assert!(
-                index <= len,
-                "Tried to remove an element at index {} from a {} length vector! This is UB in release mode",
-                index,
-                len,
-            );
-
             self.set_len_unchecked(len.wrapping_sub(1));
             let ptr = self.raw.as_mut_ptr().add(index);
             let value = ptr.read();
@@ -852,6 +984,11 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             N,
             len,
         );
+
+        // Safety
+        //
+        // * the index is in bounds
+        // * the collection isn't empty, so `ptr.add(len - index - N)` is valid to read `N` elements
         unsafe {
             self.set_len_unchecked(len.wrapping_sub(N));
             let ptr = self.as_mut_ptr().add(index);
@@ -873,11 +1010,15 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// the `index` must be in bounds
     pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
-        unsafe {
-            if Some(0) == A::CONST_CAPACITY {
-                panic!("Tried to remove an element from a zero-capacity vector!")
-            }
+        if Some(0) == A::CONST_CAPACITY {
+            panic!("Tried to remove an element from a zero-capacity vector!")
+        }
 
+        // Safety
+        //
+        // * the index is in bounds
+        // * the collection isn't empty
+        unsafe {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_sub(1));
             let ptr = self.raw.as_mut_ptr();
@@ -930,6 +1071,11 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         );
 
         unsafe {
+            // Safety
+            //
+            // * the index is in bounds
+            // * other has reserved enough space
+            // * we ignore all elements after index
             let slice = self.get_unchecked(index..);
             other.reserve(slice.len());
             other.extend_from_slice_unchecked(slice);
@@ -1031,12 +1177,12 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// You must not drop any of the elements in `slice`, and
     /// there must be at least `slice.len()` remaining capacity in the vector
     pub unsafe fn extend_from_slice_unchecked(&mut self, slice: &[A::Item]) {
-        unsafe {
-            debug_assert!(
-                self.remaining_capacity() >= slice.len(),
-                "Not enough capacity to hold the slice"
-            );
+        debug_assert!(
+            self.remaining_capacity() >= slice.len(),
+            "Not enough capacity to hold the slice"
+        );
 
+        unsafe {
             let len = self.len();
             self.as_mut_ptr()
                 .add(len)
@@ -1059,6 +1205,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     {
         self.reserve(self.len());
 
+        // Safety
+        //
+        // We reserved enough space
         unsafe { extension::Extension::extend_from_slice(self, slice) }
     }
 }

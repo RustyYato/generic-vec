@@ -14,6 +14,11 @@ where
     let mut ptr = vec.raw.as_mut_ptr();
 
     for value in slice.iter().cloned() {
+        // Safety
+        //
+        // `clone_extend_from_slice` is only called from `Extension::extend_from_slice`
+        // which has the pre-condition that there must be at least enough remaining capacity
+        // for the slice. So it is safe to write the contents of the slice
         unsafe {
             ptr.write(value);
             len += 1;
@@ -29,6 +34,11 @@ where
     let mut len = crate::set_len::SetLenOnDrop::new(&mut vec.len);
     let mut ptr = vec.raw.as_mut_ptr();
 
+    // Safety
+    //
+    // `clone_grow` is only called from `Extension::grow`
+    // which has the pre-condition that there must be at least enough remaining capacity
+    // for the `additional` new elements
     for _ in 1..additional {
         unsafe {
             ptr.write(value.clone());
@@ -66,9 +76,20 @@ impl<A: ?Sized + Storage> Extension<A::Item> for GenericVec<A>
 where
     A::Item: Copy,
 {
-    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { unsafe { self.extend_from_slice_unchecked(slice) } }
+    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) {
+        // Safety
+        //
+        // * `Extension::extend_from_slice`'s precondition ensure that
+        //   there is enough capacity for `slice`
+        // * `A::Item: Copy`, so there is nothing to drop
+        unsafe { self.extend_from_slice_unchecked(slice) }
+    }
 
     default unsafe fn grow(&mut self, additional: usize, value: A::Item) {
+        // Safety
+        //
+        // * `Extension::grow`'s precondition ensure that
+        //   there is enough capacity for `additional` elements
         let len = self.len();
         unsafe {
             self.set_len_unchecked(len.wrapping_add(additional));

@@ -87,6 +87,10 @@ impl<A: ?Sized + Storage> BorrowMut<[A::Item]> for GenericVec<A> {
 impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
     fn from(array: [T; N]) -> Self {
         let mut array = crate::ArrayVec::<T, N>::with_raw(crate::raw::Uninit::new(array));
+        // Safety
+        //
+        // The array is created with only initialized elements, and has
+        // `N` elements
         unsafe {
             array.set_len_unchecked(N);
         }
