@@ -8,7 +8,7 @@ pub type UninitSlice<'a, T> = Uninit<&'a mut [MaybeUninit<T>]>;
 pub type Slice<'a, T> = Init<&'a mut [T]>;
 
 unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
-    fn is_valid_storage(&self) -> bool { crate::raw::is_compatible::<T, U>() }
+    fn is_valid_storage() -> bool { crate::raw::is_compatible::<T, U>() }
 
     fn capacity(&self) -> usize {
         self.0
@@ -39,7 +39,7 @@ unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
 
 unsafe impl<T: Copy> crate::raw::StorageInit<T> for Slice<'_, T> {}
 unsafe impl<T: Copy> Storage<T> for Slice<'_, T> {
-    fn is_valid_storage(&self) -> bool { true }
+    fn is_valid_storage() -> bool { true }
 
     fn capacity(&self) -> usize { self.0.len() }
 

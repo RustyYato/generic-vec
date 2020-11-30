@@ -43,14 +43,14 @@ impl<T> Default for Heap<T> {
     fn default() -> Self { Self::new() }
 }
 
-unsafe impl<T> Storage<T> for Heap<T> {
-    fn is_valid_storage(&self) -> bool { true }
+unsafe impl<T, U> Storage<U> for Heap<T> {
+    fn is_valid_storage() -> bool { crate::raw::is_identical::<T, U>() }
 
     fn capacity(&self) -> usize { self.capacity }
 
-    fn as_ptr(&self) -> *const T { self.ptr.as_ptr() }
+    fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut T { self.ptr.as_ptr() }
+    fn as_mut_ptr(&mut self) -> *mut U { self.ptr.as_ptr().cast() }
 
     fn reserve(&mut self, new_capacity: usize) {
         if self.capacity < new_capacity {
@@ -106,7 +106,7 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
     unsafe { Ok(Layout::from_size_align_unchecked(alloc_size, layout.align())) }
 }
 
-impl<T> StorageWithCapacity<T> for Heap<T> {
+impl<T> Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::new()
@@ -126,6 +126,10 @@ impl<T> StorageWithCapacity<T> for Heap<T> {
             capacity,
         }
     }
+}
+
+impl<T, U> StorageWithCapacity<U> for Heap<T> {
+    fn with_capacity(capacity: usize) -> Self { Self::with_capacity(capacity) }
 }
 
 impl<T> Heap<T> {

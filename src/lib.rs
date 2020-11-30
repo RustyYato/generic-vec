@@ -134,6 +134,12 @@ impl<T, S: ?Sized + Storage<T>> Drop for GenericVec<T, S> {
 impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty GenericVec with the given backend
     pub fn with_storage(storage: S) -> Self {
+        assert!(
+            S::is_valid_storage(),
+            "Invalid storage! {} is not compatible with {}",
+            core::any::type_name::<T>(),
+            core::any::type_name::<S>()
+        );
         Self {
             storage,
             len: 0,
@@ -244,7 +250,17 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
     ///
     /// the length must be less than `raw.capacity()` and
     /// all elements in the range `0..length`, must be initialized
+    ///
+    /// # Panic
+    ///
+    /// If the given storage cannot hold type `T`, then this method will panic
     pub unsafe fn from_raw_parts(len: usize, storage: S) -> Self {
+        assert!(
+            S::is_valid_storage(),
+            "Invalid storage! {} is not compatible with {}",
+            core::any::type_name::<T>(),
+            core::any::type_name::<S>()
+        );
         Self {
             storage,
             len,

@@ -17,6 +17,7 @@ mod array;
 #[cfg(feature = "alloc")]
 mod heap;
 mod slice;
+mod zero_sized;
 
 #[cfg(feature = "nightly")]
 pub use array::{Array, UninitArray};
@@ -24,6 +25,7 @@ pub use array::{Array, UninitArray};
 pub use heap::Heap;
 
 pub use slice::{Slice, UninitSlice};
+pub use zero_sized::ZeroSized;
 
 /// A slice or array storage that contains initialized `Copy` types
 #[repr(transparent)]
@@ -53,7 +55,8 @@ pub unsafe trait Storage<T> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = None;
 
-    fn is_valid_storage(&self) -> bool;
+    /// Returns true if the this storage can hold types `T`
+    fn is_valid_storage() -> bool;
 
     /// The number of elements that it is valid to write to this `Storage`
     ///
@@ -109,7 +112,7 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn is_valid_storage(&self) -> bool { S::is_valid_storage(self) }
+    fn is_valid_storage() -> bool { S::is_valid_storage() }
     fn capacity(&self) -> usize { S::capacity(self) }
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
@@ -124,7 +127,7 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn is_valid_storage(&self) -> bool { S::is_valid_storage(self) }
+    fn is_valid_storage() -> bool { S::is_valid_storage() }
     fn capacity(&self) -> usize { S::capacity(self) }
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }

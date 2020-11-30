@@ -65,7 +65,7 @@ unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N * size_of::<T>() / size_of::<U>());
 
-    fn is_valid_storage(&self) -> bool { crate::raw::is_compatible::<T, U>() }
+    fn is_valid_storage() -> bool { crate::raw::is_compatible::<T, U>() }
 
     fn capacity(&self) -> usize { <Self as Storage<U>>::CONST_CAPACITY.unwrap() }
 
@@ -116,7 +116,7 @@ unsafe impl<T: Copy, const N: usize> Storage<T> for Array<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
 
-    fn is_valid_storage(&self) -> bool { true }
+    fn is_valid_storage() -> bool { true }
 
     fn capacity(&self) -> usize { N }
 
