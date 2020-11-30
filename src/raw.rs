@@ -1,4 +1,4 @@
-//! The raw vector typse that back-up the [`GenericVec`]
+//! The raw vector typse that back-up the [`GenericVec`](crate::GenericVec)
 
 #[cfg(feature = "nightly")]
 pub use core::alloc::AllocError;

@@ -2,7 +2,8 @@ use crate::{RawDrain, Storage};
 
 use core::iter::FusedIterator;
 
-/// This struct is created by [`GenericVec::drain`]. See its documentation for more.
+/// This struct is created by [`GenericVec::drain`](crate::GenericVec::drain).
+/// See its documentation for more.
 pub struct Drain<'a, A: ?Sized + Storage> {
     raw: RawDrain<'a, A>,
 }

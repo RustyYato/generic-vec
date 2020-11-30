@@ -1,6 +1,7 @@
 use crate::{RawDrain, Storage};
 
-/// This struct is created by [`GenericVec::splice`]. See its documentation for more.
+/// This struct is created by [`GenericVec::splice`](crate::GenericVec::splice).
+/// See its documentation for more.
 pub struct Splice<'a, A, I>
 where
     A: ?Sized + Storage,

@@ -7,7 +7,8 @@ use core::{
     ptr,
 };
 
-/// This struct is created by the into_iter method on [`GenericVec`] (provided by the [`IntoIterator`] trait).
+/// This struct is created by [`GenericVec::into_iter`](crate::GenericVec::into_iter).
+/// See its documentation for more.
 pub struct IntoIter<A: ?Sized + Storage> {
     index: usize,
     vec: ManuallyDrop<GenericVec<A>>,
