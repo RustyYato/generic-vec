@@ -12,7 +12,7 @@
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
 #![allow(unused_unsafe)]
-#![forbid(missing_docs)]
+#![forbid(missing_docs, clippy::missing_safety_doc)]
 
 //! generic-vec
 //!
@@ -163,6 +163,26 @@ impl<T, const N: usize> ArrayVec<T, N> {
             raw: raw::UninitArray::uninit(),
         }
     }
+
+    /// Create a new full `ArrayVec`
+    pub const fn from_array(array: [T; N]) -> Self {
+        Self {
+            len: 0,
+            mark: PhantomData,
+            raw: raw::UninitArray::new(array),
+        }
+    }
+
+    /// Convert this `ArrayVec` into an array
+    ///
+    /// # Panic
+    ///
+    /// Panics if the the collection is not full
+    pub fn into_array(self) -> [T; N] {
+        assert!(self.is_full());
+        let this = core::mem::ManuallyDrop::new(self);
+        unsafe { this.raw.0.as_ptr().read() }
+    }
 }
 
 #[cfg(feature = "nightly")]
@@ -208,6 +228,28 @@ impl<'a, T: Copy> InitSliceVec<'a, T> {
         let mut vec = Self::with_raw(raw::Init(slice));
         vec.set_len(len);
         vec
+    }
+}
+
+impl<A: Storage> GenericVec<A> {
+    /// Convert a `GenericVec` into a length-storage pair
+    pub fn into_raw_parts(self) -> (usize, A) {
+        let this = core::mem::ManuallyDrop::new(self);
+        unsafe { (this.len, core::ptr::read(&this.raw)) }
+    }
+
+    /// Create a `GenericVec` from a length-storage pair
+    ///
+    /// # Safety
+    ///
+    /// the length must be less than `raw.capacity()` and
+    /// all elements in the range `0..length`, must be initialized
+    pub unsafe fn from_raw_parts(len: usize, raw: A) -> Self {
+        Self {
+            raw,
+            len,
+            mark: PhantomData,
+        }
     }
 }
 
@@ -1032,8 +1074,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
 
     /// Splits the collection into two at the given index.
     ///
-    /// Returns a newly allocated vector containing the elements in the range [at, len).
-    /// After the call, the original vector will be left containing the elements [0, at)
+    /// Returns a newly allocated vector containing the elements in the range `[at, len)`.
+    /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
     pub fn split_off<B>(&mut self, index: usize) -> GenericVec<B>
     where
@@ -1056,8 +1098,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
 
     /// Splits the collection into two at the given index.
     ///
-    /// Appends the elements from the range [at, len) to `other`.
-    /// After the call, the original vector will be left containing the elements [0, at)
+    /// Appends the elements from the range `[at, len)` to `other`.
+    /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
     pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<B>)
     where
