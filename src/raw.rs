@@ -32,17 +32,32 @@ pub use zero_sized::ZeroSized;
 pub struct Init<T: ?Sized>(pub T);
 /// A slice or array storage that contains uninitialized data
 #[repr(transparent)]
-pub struct Uninit<T: ?Sized>(pub T);
+pub struct Uninit<T: ?Sized>(pub(crate) T);
+
+impl<T> Uninit<T> {
+    /// Create a new `Uninit` storage
+    pub fn new(value: T) -> Self { Self(value) }
+
+    /// Get the backing value of the this `Uninit` storage
+    ///
+    /// # Safety
+    ///
+    /// This `Uninit` storage must be backed by a potentially
+    /// uninitialized source.
+    pub unsafe fn into_inner(self) -> T { self.0 }
+}
 
 /// A [`Storage`] that can only contain initialized `Storage::Item`
 pub unsafe trait StorageInit<T>: Storage<T> {}
 
+/// Check if type `U` smaller than `T` and less aligned than `T`
 pub const fn is_compatible<T, U>() -> bool {
     use core::mem::{align_of, size_of};
 
     size_of::<T>() >= size_of::<U>() && align_of::<T>() >= align_of::<U>()
 }
 
+/// Check if type `U` is layout identical to `T`
 pub const fn is_identical<T, U>() -> bool {
     use core::mem::{align_of, size_of};
 

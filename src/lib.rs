@@ -12,7 +12,7 @@
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
 #![allow(unused_unsafe)]
-// #![forbid(missing_docs, clippy::missing_safety_doc)]
+#![forbid(missing_docs, clippy::missing_safety_doc)]
 
 //! generic-vec
 //!
@@ -448,17 +448,18 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         // * the `ptr` always stays in bounds
 
         self.reserve(additional);
+        let mut writer = self.spare_capacity_mut();
 
-        let mut len = set_len::SetLenOnDrop::new(&mut self.len);
-        let mut ptr = unsafe { self.storage.as_mut_ptr().add(*len) };
-        let end = unsafe { ptr.add(additional) };
-
-        while ptr != end {
+        for _ in 0..additional {
             unsafe {
-                ptr.write(value());
-                ptr = ptr.add(1);
-                len += 1;
+                writer.push_unchecked(value());
             }
+        }
+
+        unsafe {
+            let writer = core::mem::ManuallyDrop::new(writer);
+            let len = writer.len() + self.len();
+            self.set_len_unchecked(len);
         }
     }
 
