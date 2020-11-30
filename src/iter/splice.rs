@@ -2,20 +2,20 @@ use crate::{RawDrain, Storage};
 
 /// This struct is created by [`GenericVec::splice`](crate::GenericVec::splice).
 /// See its documentation for more.
-pub struct Splice<'a, A, I>
+pub struct Splice<'a, T, S, I>
 where
-    A: ?Sized + Storage,
-    I: Iterator<Item = A::Item>,
+    S: ?Sized + Storage<T>,
+    I: Iterator<Item = T>,
 {
-    raw: RawDrain<'a, A>,
+    raw: RawDrain<'a, T, S>,
     replace_with: I,
 }
 
-impl<'a, A: ?Sized + Storage, I: Iterator<Item = A::Item>> Splice<'a, A, I> {
-    pub(crate) fn new(raw: RawDrain<'a, A>, replace_with: I) -> Self { Self { raw, replace_with } }
+impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Splice<'a, T, S, I> {
+    pub(crate) fn new(raw: RawDrain<'a, T, S>, replace_with: I) -> Self { Self { raw, replace_with } }
 }
 
-impl<A: ?Sized + Storage, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I> {
+impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S, I> {
     fn drop(&mut self) {
         self.for_each(drop);
 
@@ -31,7 +31,7 @@ impl<A: ?Sized + Storage, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I>
             replace_with.for_each(|item| unsafe {
                 buffer.push_unchecked(item);
 
-                if !RawDrain::<A>::IS_ZS && buffer.is_full() {
+                if !RawDrain::<T, S>::IS_ZS && buffer.is_full() {
                     unsafe {
                         raw.assert_space(buffer.len());
                         raw.consume_write_slice_front(&buffer);
@@ -60,7 +60,7 @@ impl<A: ?Sized + Storage, I: Iterator<Item = A::Item>> Drop for Splice<'_, A, I>
     }
 }
 
-impl<'a, A: ?Sized + Storage, I: Iterator<Item = A::Item>> Iterator for Splice<'a, A, I> {
+impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Iterator for Splice<'a, T, S, I> {
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {

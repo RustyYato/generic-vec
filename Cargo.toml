@@ -8,7 +8,7 @@ edition = "2018"
 
 [features]
 
-default = ['std']
+default = ['std', 'nightly']
 
 std = ['alloc']
 alloc = []

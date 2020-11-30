@@ -33,30 +33,39 @@ pub struct Init<T: ?Sized>(pub T);
 pub struct Uninit<T: ?Sized>(pub T);
 
 /// A [`Storage`] that can only contain initialized `Storage::Item`
-pub unsafe trait StorageInit: Storage {}
+pub unsafe trait StorageInit<T>: Storage<T> {}
 
-/// A type that can hold `Self::Item`s, and potentially
+pub const fn is_compatible<T, U>() -> bool {
+    use core::mem::{align_of, size_of};
+
+    size_of::<T>() >= size_of::<U>() && align_of::<T>() >= align_of::<U>()
+}
+
+pub const fn is_identical<T, U>() -> bool {
+    use core::mem::{align_of, size_of};
+
+    size_of::<T>() == size_of::<U>() && align_of::<T>() == align_of::<U>()
+}
+
+/// A type that can hold `T`s, and potentially
 /// reserve space for more `Self::Items`s
-pub unsafe trait Storage {
+pub unsafe trait Storage<T> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = None;
 
-    /// The type that this storage can hold
-    type Item;
-    /// The type that this storage uses to represent `Self::Item`
-    type BufferItem;
+    fn is_valid_storage(&self) -> bool;
 
     /// The number of elements that it is valid to write to this `Storage`
     ///
     /// i.e. `as_mut_ptr()..as_mut_ptr() + capacity()` should be valid to write
-    /// `Self::Item`s
+    /// `T`s
     fn capacity(&self) -> usize;
 
     /// Returns a pointer to the first element
-    fn as_ptr(&self) -> *const Self::Item;
+    fn as_ptr(&self) -> *const T;
 
     /// Returns a mutable pointer to the first element
-    fn as_mut_ptr(&mut self) -> *mut Self::Item;
+    fn as_mut_ptr(&mut self) -> *mut T;
 
     /// Reserves space for at least `new_capacity` elements
     ///
@@ -83,7 +92,7 @@ pub unsafe trait Storage {
 }
 
 /// A storage that can be initially created with a given capacity
-pub trait StorageWithCapacity: Storage + Default {
+pub trait StorageWithCapacity<T>: Storage<T> + Default {
     /// Creates a new storage with at least the given storage capacity
     fn with_capacity(capacity: usize) -> Self;
 
@@ -95,44 +104,42 @@ pub trait StorageWithCapacity: Storage + Default {
     }
 }
 
-unsafe impl<T: ?Sized + StorageInit> StorageInit for &mut T {}
-unsafe impl<T: ?Sized + Storage> Storage for &mut T {
+unsafe impl<T, S: ?Sized + StorageInit<T>> StorageInit<T> for &mut S {}
+unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[doc(hidden)]
-    const CONST_CAPACITY: Option<usize> = T::CONST_CAPACITY;
-    type Item = T::Item;
-    type BufferItem = T::BufferItem;
+    const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn capacity(&self) -> usize { T::capacity(self) }
-    fn as_ptr(&self) -> *const Self::Item { T::as_ptr(self) }
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { T::as_mut_ptr(self) }
-    fn reserve(&mut self, new_capacity: usize) { T::reserve(self, new_capacity) }
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { T::try_reserve(self, new_capacity) }
+    fn is_valid_storage(&self) -> bool { S::is_valid_storage(self) }
+    fn capacity(&self) -> usize { S::capacity(self) }
+    fn as_ptr(&self) -> *const T { S::as_ptr(self) }
+    fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
+    fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
+    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
 }
 
 #[cfg(feature = "alloc")]
-unsafe impl<T: ?Sized + StorageInit> StorageInit for Box<T> {}
+unsafe impl<T, S: ?Sized + StorageInit<T>> StorageInit<T> for Box<S> {}
 #[cfg(feature = "alloc")]
-unsafe impl<T: ?Sized + Storage> Storage for Box<T> {
+unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
-    const CONST_CAPACITY: Option<usize> = T::CONST_CAPACITY;
-    type Item = T::Item;
-    type BufferItem = T::BufferItem;
+    const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn capacity(&self) -> usize { T::capacity(self) }
-    fn as_ptr(&self) -> *const Self::Item { T::as_ptr(self) }
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { T::as_mut_ptr(self) }
-    fn reserve(&mut self, new_capacity: usize) { T::reserve(self, new_capacity) }
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { T::try_reserve(self, new_capacity) }
+    fn is_valid_storage(&self) -> bool { S::is_valid_storage(self) }
+    fn capacity(&self) -> usize { S::capacity(self) }
+    fn as_ptr(&self) -> *const T { S::as_ptr(self) }
+    fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
+    fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
+    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
 }
 
 #[cfg(feature = "alloc")]
-impl<T: ?Sized + StorageWithCapacity> StorageWithCapacity for Box<T> {
-    fn with_capacity(capacity: usize) -> Self { Box::new(T::with_capacity(capacity)) }
+impl<T, S: ?Sized + StorageWithCapacity<T>> StorageWithCapacity<T> for Box<S> {
+    fn with_capacity(capacity: usize) -> Self { Box::new(S::with_capacity(capacity)) }
 
     #[doc(hidden)]
     #[inline(always)]
     #[allow(non_snake_case)]
     fn __with_capacity__const_capacity_checked(capacity: usize, _old_capacity: Option<usize>) -> Self {
-        Box::new(T::__with_capacity__const_capacity_checked(capacity, _old_capacity))
+        Box::new(S::__with_capacity__const_capacity_checked(capacity, _old_capacity))
     }
 }

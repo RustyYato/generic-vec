@@ -1,6 +1,6 @@
 use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
-use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
+use core::{alloc::Layout, ptr::NonNull};
 use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
 doc_heap! {
@@ -43,15 +43,14 @@ impl<T> Default for Heap<T> {
     fn default() -> Self { Self::new() }
 }
 
-unsafe impl<T> Storage for Heap<T> {
-    type Item = T;
-    type BufferItem = MaybeUninit<T>;
+unsafe impl<T> Storage<T> for Heap<T> {
+    fn is_valid_storage(&self) -> bool { true }
 
     fn capacity(&self) -> usize { self.capacity }
 
-    fn as_ptr(&self) -> *const Self::Item { self.ptr.as_ptr() }
+    fn as_ptr(&self) -> *const T { self.ptr.as_ptr() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.ptr.as_ptr() }
+    fn as_mut_ptr(&mut self) -> *mut T { self.ptr.as_ptr() }
 
     fn reserve(&mut self, new_capacity: usize) {
         if self.capacity < new_capacity {
@@ -107,7 +106,7 @@ pub fn repeat(layout: Layout, n: usize) -> Result<Layout, ()> {
     unsafe { Ok(Layout::from_size_align_unchecked(alloc_size, layout.align())) }
 }
 
-impl<T> StorageWithCapacity for Heap<T> {
+impl<T> StorageWithCapacity<T> for Heap<T> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::new()

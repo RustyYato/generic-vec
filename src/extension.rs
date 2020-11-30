@@ -6,12 +6,12 @@ pub trait Extension<T> {
     unsafe fn grow(&mut self, additional: usize, value: T);
 }
 
-fn clone_extend_from_slice<A: ?Sized + Storage>(vec: &mut GenericVec<A>, slice: &[A::Item])
+fn clone_extend_from_slice<T, S: ?Sized + Storage<T>>(vec: &mut GenericVec<T, S>, slice: &[T])
 where
-    A::Item: Clone,
+    T: Clone,
 {
     let mut len = crate::set_len::SetLenOnDrop::new(&mut vec.len);
-    let mut ptr = vec.raw.as_mut_ptr();
+    let mut ptr = vec.storage.as_mut_ptr();
 
     for value in slice.iter().cloned() {
         // Safety
@@ -27,12 +27,12 @@ where
     }
 }
 
-fn clone_grow<A: ?Sized + Storage>(vec: &mut GenericVec<A>, additional: usize, value: A::Item)
+fn clone_grow<T, S: ?Sized + Storage<T>>(vec: &mut GenericVec<T, S>, additional: usize, value: T)
 where
-    A::Item: Clone,
+    T: Clone,
 {
     let mut len = crate::set_len::SetLenOnDrop::new(&mut vec.len);
-    let mut ptr = vec.raw.as_mut_ptr();
+    let mut ptr = vec.storage.as_mut_ptr();
 
     // Safety
     //
@@ -54,38 +54,38 @@ where
     }
 }
 
-impl<A: ?Sized + Storage> Extension<A::Item> for GenericVec<A>
+impl<T, S: ?Sized + Storage<T>> Extension<T> for GenericVec<T, S>
 where
-    A::Item: Clone,
+    T: Clone,
 {
     #[cfg(feature = "nightly")]
-    default unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { clone_extend_from_slice(self, slice) }
+    default unsafe fn extend_from_slice(&mut self, slice: &[T]) { clone_extend_from_slice(self, slice) }
 
     #[cfg(not(feature = "nightly"))]
-    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) { clone_extend_from_slice(self, slice) }
+    unsafe fn extend_from_slice(&mut self, slice: &[T]) { clone_extend_from_slice(self, slice) }
 
     #[cfg(feature = "nightly")]
-    default unsafe fn grow(&mut self, additional: usize, value: A::Item) { clone_grow(self, additional, value) }
+    default unsafe fn grow(&mut self, additional: usize, value: T) { clone_grow(self, additional, value) }
 
     #[cfg(not(feature = "nightly"))]
-    unsafe fn grow(&mut self, additional: usize, value: A::Item) { clone_grow(self, additional, value) }
+    unsafe fn grow(&mut self, additional: usize, value: T) { clone_grow(self, additional, value) }
 }
 
 #[cfg(feature = "nightly")]
-impl<A: ?Sized + Storage> Extension<A::Item> for GenericVec<A>
+impl<T, S: ?Sized + Storage<T>> Extension<T> for GenericVec<T, S>
 where
-    A::Item: Copy,
+    T: Copy,
 {
-    unsafe fn extend_from_slice(&mut self, slice: &[A::Item]) {
+    unsafe fn extend_from_slice(&mut self, slice: &[T]) {
         // Safety
         //
         // * `Extension::extend_from_slice`'s precondition ensure that
         //   there is enough capacity for `slice`
-        // * `A::Item: Copy`, so there is nothing to drop
+        // * `T: Copy`, so there is nothing to drop
         unsafe { self.extend_from_slice_unchecked(slice) }
     }
 
-    default unsafe fn grow(&mut self, additional: usize, value: A::Item) {
+    default unsafe fn grow(&mut self, additional: usize, value: T) {
         // Safety
         //
         // * `Extension::grow`'s precondition ensure that
@@ -94,7 +94,7 @@ where
         unsafe {
             self.set_len_unchecked(len.wrapping_add(additional));
         }
-        let mut ptr = self.raw.as_mut_ptr();
+        let mut ptr = self.storage.as_mut_ptr();
 
         for _ in 0..additional {
             unsafe {

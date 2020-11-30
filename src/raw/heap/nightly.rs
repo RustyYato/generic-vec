@@ -1,6 +1,6 @@
 use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
-use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
+use core::{alloc::Layout, ptr::NonNull};
 use std::alloc::handle_alloc_error;
 
 #[cfg(feature = "nightly")]
@@ -59,15 +59,14 @@ impl<T, A: AllocRef + Default> Default for Heap<T, A> {
     fn default() -> Self { Self::with_alloc(Default::default()) }
 }
 
-unsafe impl<T, A: ?Sized + AllocRef> Storage for Heap<T, A> {
-    type Item = T;
-    type BufferItem = MaybeUninit<T>;
+unsafe impl<T, A: ?Sized + AllocRef> Storage<T> for Heap<T, A> {
+    fn is_valid_storage(&self) -> bool { true }
 
     fn capacity(&self) -> usize { self.capacity }
 
-    fn as_ptr(&self) -> *const Self::Item { self.ptr.as_ptr() }
+    fn as_ptr(&self) -> *const T { self.ptr.as_ptr() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.ptr.as_ptr() }
+    fn as_mut_ptr(&mut self) -> *mut T { self.ptr.as_ptr() }
 
     fn reserve(&mut self, new_capacity: usize) {
         if self.capacity < new_capacity {
@@ -84,7 +83,7 @@ unsafe impl<T, A: ?Sized + AllocRef> Storage for Heap<T, A> {
     }
 }
 
-impl<T, A: Default + AllocRef> StorageWithCapacity for Heap<T, A> {
+impl<T, A: Default + AllocRef> StorageWithCapacity<T> for Heap<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::default()

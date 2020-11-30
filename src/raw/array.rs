@@ -1,5 +1,8 @@
 use crate::raw::{Init, Storage, StorageWithCapacity, Uninit};
-use core::{alloc::AllocError, mem::MaybeUninit};
+use core::{
+    alloc::AllocError,
+    mem::{size_of, MaybeUninit},
+};
 
 /// An uninitialized array storage
 pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
@@ -36,7 +39,7 @@ impl<T: Copy, const N: usize> Clone for Array<T, N> {
     fn clone(&self) -> Self { *self }
 }
 
-impl<T, const N: usize> StorageWithCapacity for UninitArray<T, N> {
+impl<U, T, const N: usize> StorageWithCapacity<U> for UninitArray<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
@@ -53,22 +56,22 @@ impl<T, const N: usize> StorageWithCapacity for UninitArray<T, N> {
     fn __with_capacity__const_capacity_checked(capacity: usize, old_capacity: Option<usize>) -> Self {
         match old_capacity {
             Some(old_capacity) if old_capacity <= N => Self::default(),
-            _ => Self::with_capacity(capacity),
+            _ => StorageWithCapacity::<U>::with_capacity(capacity),
         }
     }
 }
 
-unsafe impl<T, const N: usize> Storage for UninitArray<T, N> {
+unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
     #[doc(hidden)]
-    const CONST_CAPACITY: Option<usize> = Some(N);
-    type Item = T;
-    type BufferItem = MaybeUninit<T>;
+    const CONST_CAPACITY: Option<usize> = Some(N * size_of::<T>() / size_of::<U>());
 
-    fn capacity(&self) -> usize { N }
+    fn is_valid_storage(&self) -> bool { crate::raw::is_compatible::<T, U>() }
 
-    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
+    fn capacity(&self) -> usize { <Self as Storage<U>>::CONST_CAPACITY.unwrap() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
+    fn as_ptr(&self) -> *const U { self.0.as_ptr().cast() }
+
+    fn as_mut_ptr(&mut self) -> *mut U { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(
@@ -86,8 +89,8 @@ unsafe impl<T, const N: usize> Storage for UninitArray<T, N> {
     }
 }
 
-unsafe impl<T: Copy, const N: usize> crate::raw::StorageInit for Array<T, N> {}
-impl<T: Default + Copy, const N: usize> StorageWithCapacity for Array<T, N> {
+unsafe impl<T: Copy, const N: usize> crate::raw::StorageInit<T> for Array<T, N> {}
+impl<T: Default + Copy, const N: usize> StorageWithCapacity<T> for Array<T, N> {
     fn with_capacity(capacity: usize) -> Self {
         assert!(
             capacity <= N,
@@ -109,17 +112,17 @@ impl<T: Default + Copy, const N: usize> StorageWithCapacity for Array<T, N> {
     }
 }
 
-unsafe impl<T: Copy, const N: usize> Storage for Array<T, N> {
+unsafe impl<T: Copy, const N: usize> Storage<T> for Array<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
-    type Item = T;
-    type BufferItem = T;
+
+    fn is_valid_storage(&self) -> bool { true }
 
     fn capacity(&self) -> usize { N }
 
-    fn as_ptr(&self) -> *const Self::Item { self.0.as_ptr().cast() }
+    fn as_ptr(&self) -> *const T { self.0.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut Self::Item { self.0.as_mut_ptr().cast() }
+    fn as_mut_ptr(&mut self) -> *mut T { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
         assert!(

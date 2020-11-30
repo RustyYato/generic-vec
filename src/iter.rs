@@ -14,21 +14,24 @@ pub use splice::Splice;
 
 use core::iter::FromIterator;
 
-use crate::{raw::StorageWithCapacity, GenericVec};
+use crate::{
+    raw::{Storage, StorageWithCapacity},
+    GenericVec,
+};
 
-impl<V, A: StorageWithCapacity> FromIterator<V> for GenericVec<A>
+impl<V, T, S: StorageWithCapacity<T>> FromIterator<V> for GenericVec<T, S>
 where
     Self: Extend<V>,
 {
-    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+    fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
         let mut array = Self::default();
         array.extend(iter);
         array
     }
 }
 
-impl<A: ?Sized + crate::raw::Storage> Extend<A::Item> for GenericVec<A> {
-    fn extend<T: IntoIterator<Item = A::Item>>(&mut self, iter: T) {
+impl<T, S: ?Sized + Storage<T>> Extend<T> for GenericVec<T, S> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         #[allow(clippy::drop_ref)]
         iter.into_iter().for_each(|item| drop(self.push(item)));
     }

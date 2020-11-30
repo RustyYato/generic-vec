@@ -12,7 +12,7 @@
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
 #![allow(unused_unsafe)]
-#![forbid(missing_docs, clippy::missing_safety_doc)]
+// #![forbid(missing_docs, clippy::missing_safety_doc)]
 
 //! generic-vec
 //!
@@ -43,24 +43,24 @@ use raw::Storage;
 /// A heap backed vector with a growable capacity
 #[cfg(feature = "alloc")]
 #[cfg(feature = "nightly")]
-pub type Vec<T, A = std::alloc::Global> = GenericVec<raw::Heap<T, A>>;
+pub type Vec<T, A = std::alloc::Global> = GenericVec<T, raw::Heap<T, A>>;
 
 /// A heap backed vector with a growable capacity
 #[cfg(feature = "alloc")]
 #[cfg(not(feature = "nightly"))]
-pub type Vec<T> = GenericVec<raw::Heap<T>>;
+pub type Vec<T> = GenericVec<T, raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
 #[cfg(feature = "nightly")]
-pub type ArrayVec<T, const N: usize> = GenericVec<raw::UninitArray<T, N>>;
+pub type ArrayVec<T, const N: usize> = GenericVec<T, raw::UninitArray<T, N>>;
 /// An slice backed vector backed by potentially uninitialized memory
-pub type SliceVec<'a, T> = GenericVec<raw::UninitSlice<'a, T>>;
+pub type SliceVec<'a, T> = GenericVec<T, raw::UninitSlice<'a, T>>;
 
 /// An array backed vector backed by initialized memory
 #[cfg(feature = "nightly")]
-pub type InitArrayVec<T, const N: usize> = GenericVec<raw::Array<T, N>>;
+pub type InitArrayVec<T, const N: usize> = GenericVec<T, raw::Array<T, N>>;
 /// An slice backed vector backed by initialized memory
-pub type InitSliceVec<'a, T> = GenericVec<raw::Slice<'a, T>>;
+pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
 
 use iter::{Drain, DrainFilter, RawDrain, Splice};
 
@@ -95,14 +95,14 @@ macro_rules! uninit_array {
 /// A vector type that can be backed up by a variety of different backends
 /// including slices, arrays, and the heap.
 #[repr(C)]
-pub struct GenericVec<A: ?Sized + Storage> {
-    mark: PhantomData<A::Item>,
+pub struct GenericVec<T, S: ?Sized + Storage<T>> {
+    mark: PhantomData<T>,
     len: usize,
-    raw: A,
+    storage: S,
 }
 
-impl<A: ?Sized + Storage> Deref for GenericVec<A> {
-    type Target = [A::Item];
+impl<T, S: ?Sized + Storage<T>> Deref for GenericVec<T, S> {
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
         let len = self.len();
@@ -112,7 +112,7 @@ impl<A: ?Sized + Storage> Deref for GenericVec<A> {
     }
 }
 
-impl<A: ?Sized + Storage> DerefMut for GenericVec<A> {
+impl<T, S: ?Sized + Storage<T>> DerefMut for GenericVec<T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         let len = self.len();
         // The first `len` elements are guaranteed to be initialized
@@ -121,7 +121,7 @@ impl<A: ?Sized + Storage> DerefMut for GenericVec<A> {
     }
 }
 
-impl<A: ?Sized + Storage> Drop for GenericVec<A> {
+impl<T, S: ?Sized + Storage<T>> Drop for GenericVec<T, S> {
     fn drop(&mut self) {
         // The first `len` elements are guaranteed to be initialized
         // as part of the guarantee on `self.set_len_unchecked`
@@ -131,25 +131,25 @@ impl<A: ?Sized + Storage> Drop for GenericVec<A> {
     }
 }
 
-impl<A: Storage> GenericVec<A> {
+impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty GenericVec with the given backend
-    pub fn with_raw(raw: A) -> Self {
+    pub fn with_storage(storage: S) -> Self {
         Self {
-            raw,
+            storage,
             len: 0,
             mark: PhantomData,
         }
     }
 }
 
-impl<A: raw::StorageWithCapacity> GenericVec<A> {
+impl<T, S: raw::StorageWithCapacity<T>> GenericVec<T, S> {
     /// Create a new empty GenericVec with the backend with at least the given capacity
-    pub fn with_capacity(capacity: usize) -> Self { Self::with_raw(A::with_capacity(capacity)) }
+    pub fn with_capacity(capacity: usize) -> Self { Self::with_storage(S::with_capacity(capacity)) }
 
     #[inline]
     #[allow(non_snake_case)]
     fn __with_capacity__const_capacity_checked(capacity: usize, old_capacity: Option<usize>) -> Self {
-        Self::with_raw(A::__with_capacity__const_capacity_checked(capacity, old_capacity))
+        Self::with_storage(S::__with_capacity__const_capacity_checked(capacity, old_capacity))
     }
 }
 
@@ -160,7 +160,7 @@ impl<T, const N: usize> ArrayVec<T, N> {
         Self {
             len: 0,
             mark: PhantomData,
-            raw: raw::UninitArray::uninit(),
+            storage: raw::UninitArray::uninit(),
         }
     }
 
@@ -169,7 +169,7 @@ impl<T, const N: usize> ArrayVec<T, N> {
         Self {
             len: 0,
             mark: PhantomData,
-            raw: raw::UninitArray::new(array),
+            storage: raw::UninitArray::new(array),
         }
     }
 
@@ -181,7 +181,7 @@ impl<T, const N: usize> ArrayVec<T, N> {
     pub fn into_array(self) -> [T; N] {
         assert!(self.is_full());
         let this = core::mem::ManuallyDrop::new(self);
-        unsafe { this.raw.0.as_ptr().read() }
+        unsafe { this.storage.0.as_ptr().read() }
     }
 }
 
@@ -192,7 +192,7 @@ impl<T: Copy, const N: usize> InitArrayVec<T, N> {
         Self {
             len: N,
             mark: PhantomData,
-            raw: raw::Array::new(array),
+            storage: raw::Array::new(array),
         }
     }
 }
@@ -204,7 +204,7 @@ impl<T> Vec<T> {
         Self {
             len: 0,
             mark: PhantomData,
-            raw: raw::Heap::new(),
+            storage: raw::Heap::new(),
         }
     }
 }
@@ -213,29 +213,29 @@ impl<T> Vec<T> {
 #[cfg(feature = "nightly")]
 impl<T, A: std::alloc::AllocRef> Vec<T, A> {
     /// Create a new empty `Vec` with the given allocator
-    pub fn with_alloc(alloc: A) -> Self { Self::with_raw(raw::Heap::with_alloc(alloc)) }
+    pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
 }
 
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
-    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_raw(raw::Uninit(slice)) }
+    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::Uninit(slice)) }
 }
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     /// Create a new full `InitSliceVec`
     pub fn new(slice: &'a mut [T]) -> Self {
         let len = slice.len();
-        let mut vec = Self::with_raw(raw::Init(slice));
+        let mut vec = Self::with_storage(raw::Init(slice));
         vec.set_len(len);
         vec
     }
 }
 
-impl<A: Storage> GenericVec<A> {
+impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Convert a `GenericVec` into a length-storage pair
-    pub fn into_raw_parts(self) -> (usize, A) {
+    pub fn into_raw_parts(self) -> (usize, S) {
         let this = core::mem::ManuallyDrop::new(self);
-        unsafe { (this.len, core::ptr::read(&this.raw)) }
+        unsafe { (this.len, core::ptr::read(&this.storage)) }
     }
 
     /// Create a `GenericVec` from a length-storage pair
@@ -244,34 +244,34 @@ impl<A: Storage> GenericVec<A> {
     ///
     /// the length must be less than `raw.capacity()` and
     /// all elements in the range `0..length`, must be initialized
-    pub unsafe fn from_raw_parts(len: usize, raw: A) -> Self {
+    pub unsafe fn from_raw_parts(len: usize, storage: S) -> Self {
         Self {
-            raw,
+            storage,
             len,
             mark: PhantomData,
         }
     }
 }
 
-impl<A: ?Sized + Storage> GenericVec<A> {
+impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Returns a shared raw pointer to the vector's buffer.
     ///
     /// It's not safe to write to this pointer except for values
     /// inside of an `UnsafeCell`
-    pub fn as_ptr(&self) -> *const A::Item { self.raw.as_ptr() }
+    pub fn as_ptr(&self) -> *const T { self.storage.as_ptr() }
 
     /// Returns a unique raw pointer to the vector's buffer.
-    pub fn as_mut_ptr(&mut self) -> *mut A::Item { self.raw.as_mut_ptr() }
+    pub fn as_mut_ptr(&mut self) -> *mut T { self.storage.as_mut_ptr() }
 
     /// Returns the number of elements in the vector
     pub fn len(&self) -> usize { self.len }
 
     /// Returns the number of elements the vector can hold without reallocating or panicing.
     pub fn capacity(&self) -> usize {
-        if core::mem::size_of::<A::Item>() == 0 {
+        if core::mem::size_of::<T>() == 0 {
             isize::MAX as usize
         } else {
-            self.raw.capacity()
+            self.storage.capacity()
         }
     }
 
@@ -295,7 +295,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Set the length of a vector
     pub fn set_len(&mut self, len: usize)
     where
-        A: raw::StorageInit,
+        S: raw::StorageInit<T>,
     {
         // Safety
         //
@@ -313,26 +313,26 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Extracts a slice containing the entire vector.
     ///
     /// Equivalent to &s[..].
-    pub fn as_slice(&self) -> &[A::Item] { self }
+    pub fn as_slice(&self) -> &[T] { self }
 
     /// Extracts a mutable slice containing the entire vector.
     ///
     /// Equivalent to &mut s[..].
-    pub fn as_mut_slice(&mut self) -> &mut [A::Item] { self }
+    pub fn as_mut_slice(&mut self) -> &mut [T] { self }
 
     /// Returns the underlying raw buffer
-    pub fn raw_buffer(&self) -> &A { &self.raw }
+    pub fn storage(&self) -> &S { &self.storage }
 
     /// Returns the underlying raw buffer
     ///
     /// # Safety
     ///
     /// You must not replace the raw buffer
-    pub unsafe fn raw_buffer_mut(&mut self) -> &mut A { &mut self.raw }
+    pub unsafe fn storage_mut(&mut self) -> &mut S { &mut self.storage }
 
     /// Returns the remaining spare capacity of the vector as a slice
     /// of `[MaybeUninit<T>]` or `[T]`
-    pub fn spare_capacity_mut(&mut self) -> &mut [A::BufferItem] {
+    pub fn spare_capacity_mut(&mut self) -> SliceVec<'_, T> {
         // Safety
         //
         // The elements from `len..capacity` are guaranteed to be contain
@@ -340,7 +340,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         unsafe {
             let len = self.len();
             let cap = self.capacity();
-            core::slice::from_raw_parts_mut(self.raw.as_mut_ptr().add(len).cast(), cap.wrapping_sub(len))
+            SliceVec::new(core::slice::from_raw_parts_mut(
+                self.storage.as_mut_ptr().add(len).cast(),
+                cap.wrapping_sub(len),
+            ))
         }
     }
 
@@ -353,7 +356,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         if self.remaining_capacity() < additional {
-            self.raw.reserve(
+            self.storage.reserve(
                 self.len()
                     .checked_add(additional)
                     .expect("Allocation overflow detected"),
@@ -366,7 +369,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     #[inline]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), raw::AllocError> {
         if self.remaining_capacity() < additional {
-            self.raw
+            self.storage
                 .try_reserve(self.len().checked_add(additional).ok_or(raw::AllocError)?)
         } else {
             Ok(())
@@ -400,9 +403,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// This method requires `T` to implement `Clone`, in order to be able to clone
     /// the passed value. If you need more flexibility (or want to rely on Default instead of `Clone`),
     /// use [`GenericVec::grow_with`].
-    pub fn grow(&mut self, additional: usize, value: A::Item)
+    pub fn grow(&mut self, additional: usize, value: T)
     where
-        A::Item: Clone,
+        T: Clone,
     {
         self.reserve(additional);
         // # Safety
@@ -419,7 +422,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// can pass `Default::default` as the second argument.
     pub fn grow_with<F>(&mut self, additional: usize, mut value: F)
     where
-        F: FnMut() -> A::Item,
+        F: FnMut() -> T,
     {
         // Safety
         //
@@ -431,7 +434,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         self.reserve(additional);
 
         let mut len = set_len::SetLenOnDrop::new(&mut self.len);
-        let mut ptr = unsafe { self.raw.as_mut_ptr().add(*len) };
+        let mut ptr = unsafe { self.storage.as_mut_ptr().add(*len) };
         let end = unsafe { ptr.add(additional) };
 
         while ptr != end {
@@ -453,7 +456,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Panic
     ///
     /// May panic or reallocate if the collection is full
-    pub fn push(&mut self, value: A::Item) -> &mut A::Item {
+    pub fn push(&mut self, value: T) -> &mut T {
         if self.len() == self.capacity() {
             self.reserve(1);
         }
@@ -470,7 +473,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// May panic or reallocate if the collection has less than N elements remaining
     #[cfg(feature = "nightly")]
-    pub fn push_array<const N: usize>(&mut self, value: [A::Item; N]) -> &mut [A::Item; N] {
+    pub fn push_array<const N: usize>(&mut self, value: [T; N]) -> &mut [T; N] {
         self.reserve(N);
 
         // Safety
@@ -486,7 +489,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// * May panic or reallocate if the collection is full
     /// * Panics if index > len.
-    pub fn insert(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+    pub fn insert(&mut self, index: usize, value: T) -> &mut T {
         assert!(
             index <= self.len(),
             "Tried to insert at {}, but length is {}",
@@ -513,7 +516,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// * May panic or reallocate if the collection has less than N elements remaining
     /// * Panics if index > len.
     #[cfg(feature = "nightly")]
-    pub fn insert_array<const N: usize>(&mut self, index: usize, value: [A::Item; N]) -> &mut [A::Item; N] {
+    pub fn insert_array<const N: usize>(&mut self, index: usize, value: [T; N]) -> &mut [T; N] {
         assert!(
             index <= self.len(),
             "Tried to insert at {}, but length is {}",
@@ -535,7 +538,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Panics
     ///
     /// Panics if the collection is empty
-    pub fn pop(&mut self) -> A::Item {
+    pub fn pop(&mut self) -> T {
         assert_ne!(self.len(), 0, "Tried to pop an element from an empty vector",);
 
         // Safety
@@ -550,7 +553,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Panics if the collection contains less than `N` elements in it
     #[cfg(feature = "nightly")]
-    pub fn pop_array<const N: usize>(&mut self) -> [A::Item; N] {
+    pub fn pop_array<const N: usize>(&mut self) -> [T; N] {
         assert!(
             self.len() >= N,
             "Tried to pop {} elements, but length is {}",
@@ -570,7 +573,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds.
-    pub fn remove(&mut self, index: usize) -> A::Item {
+    pub fn remove(&mut self, index: usize) -> T {
         assert!(
             index < self.len(),
             "Tried to remove item at index {}, but length is {}",
@@ -591,7 +594,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Panics if `index` is out of bounds or if `index + N > len()`
     #[cfg(feature = "nightly")]
-    pub fn remove_array<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
+    pub fn remove_array<const N: usize>(&mut self, index: usize) -> [T; N] {
         assert!(
             self.len() >= index && self.len().wrapping_sub(index) >= N,
             "Tried to remove {} elements at index {}, but length is {}",
@@ -617,7 +620,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds.
-    pub fn swap_remove(&mut self, index: usize) -> A::Item {
+    pub fn swap_remove(&mut self, index: usize) -> T {
         assert!(
             index < self.len(),
             "Tried to remove item at index {}, but length is {}",
@@ -635,7 +638,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns the `Err(value)` if the collection is full
     ///
     /// Guaranteed to not panic/abort/allocate
-    pub fn try_push(&mut self, value: A::Item) -> Result<&mut A::Item, A::Item> {
+    pub fn try_push(&mut self, value: T) -> Result<&mut T, T> {
         if self.is_full() {
             Err(value)
         } else {
@@ -652,7 +655,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Guaranteed to not panic/abort/allocate
     #[cfg(feature = "nightly")]
-    pub fn try_push_array<const N: usize>(&mut self, value: [A::Item; N]) -> Result<&mut [A::Item; N], [A::Item; N]> {
+    pub fn try_push_array<const N: usize>(&mut self, value: [T; N]) -> Result<&mut [T; N], [T; N]> {
         if self.remaining_capacity() < N {
             Err(value)
         } else {
@@ -668,7 +671,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns the `Err(value)` if the collection is full or index is out of bounds
     ///
     /// Guaranteed to not panic/abort/allocate
-    pub fn try_insert(&mut self, index: usize, value: A::Item) -> Result<&mut A::Item, A::Item> {
+    pub fn try_insert(&mut self, index: usize, value: T) -> Result<&mut T, T> {
         if self.is_full() || index > self.len() {
             Err(value)
         } else {
@@ -687,11 +690,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Guaranteed to not panic/abort/allocate
     #[cfg(feature = "nightly")]
-    pub fn try_insert_array<const N: usize>(
-        &mut self,
-        index: usize,
-        value: [A::Item; N],
-    ) -> Result<&mut [A::Item; N], [A::Item; N]> {
+    pub fn try_insert_array<const N: usize>(&mut self, index: usize, value: [T; N]) -> Result<&mut [T; N], [T; N]> {
         if self.capacity().wrapping_sub(self.len()) < N || index > self.len() {
             Err(value)
         } else {
@@ -707,7 +706,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns `None` if the collection is empty
     ///
     /// Guaranteed to not panic/abort/allocate
-    pub fn try_pop(&mut self) -> Option<A::Item> {
+    pub fn try_pop(&mut self) -> Option<T> {
         if self.is_empty() {
             None
         } else {
@@ -723,7 +722,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Guaranteed to not panic/abort/allocate
     #[cfg(feature = "nightly")]
-    pub fn try_pop_array<const N: usize>(&mut self) -> Option<[A::Item; N]> {
+    pub fn try_pop_array<const N: usize>(&mut self) -> Option<[T; N]> {
         if self.is_empty() {
             None
         } else {
@@ -739,7 +738,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns `None` if collection is empty or `index` is out of bounds.
     ///
     /// Guaranteed to not panic/abort/allocate
-    pub fn try_remove(&mut self, index: usize) -> Option<A::Item> {
+    pub fn try_remove(&mut self, index: usize) -> Option<T> {
         if self.len() < index {
             None
         } else {
@@ -757,7 +756,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Guaranteed to not panic/abort/allocate
     #[cfg(feature = "nightly")]
-    pub fn try_remove_array<const N: usize>(&mut self, index: usize) -> Option<[A::Item; N]> {
+    pub fn try_remove_array<const N: usize>(&mut self, index: usize) -> Option<[T; N]> {
         if self.len() < index || self.len().wrapping_sub(index) < N {
             None
         } else {
@@ -778,7 +777,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// This does not preserve ordering, but is O(1).
     ///
     /// Guaranteed to not panic/abort/allocate
-    pub fn try_swap_remove(&mut self, index: usize) -> Option<A::Item> {
+    pub fn try_swap_remove(&mut self, index: usize) -> Option<T> {
         if index < self.len() {
             // Safety
             //
@@ -794,8 +793,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Safety
     ///
     /// the collection must not be full
-    pub unsafe fn push_unchecked(&mut self, value: A::Item) -> &mut A::Item {
-        if Some(0) == A::CONST_CAPACITY {
+    pub unsafe fn push_unchecked(&mut self, value: T) -> &mut T {
+        if Some(0) == S::CONST_CAPACITY {
             panic!("Tried to push an element into a zero-capacity vector!")
         }
 
@@ -823,8 +822,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// the collection's remaining capacity must be at least N
     #[cfg(feature = "nightly")]
-    pub unsafe fn push_array_unchecked<const N: usize>(&mut self, value: [A::Item; N]) -> &mut [A::Item; N] {
-        match A::CONST_CAPACITY {
+    pub unsafe fn push_array_unchecked<const N: usize>(&mut self, value: [T; N]) -> &mut [T; N] {
+        match S::CONST_CAPACITY {
             Some(n) if n < N => {
                 panic!("Tried to push an array larger than the maximum capacity of the vector!")
             }
@@ -839,7 +838,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(N));
             let ptr = self.as_mut_ptr();
-            let out = ptr.add(len) as *mut [A::Item; N];
+            let out = ptr.add(len) as *mut [T; N];
             out.write(value);
             &mut *out
         }
@@ -852,9 +851,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// * the collection is must not be full
     /// * hte index must be in bounds
-    pub unsafe fn insert_unchecked(&mut self, index: usize, value: A::Item) -> &mut A::Item {
+    pub unsafe fn insert_unchecked(&mut self, index: usize, value: T) -> &mut T {
         unsafe {
-            if Some(0) == A::CONST_CAPACITY {
+            if Some(0) == S::CONST_CAPACITY {
                 panic!("Tried to insert an element into a zero-capacity vector!")
             }
 
@@ -864,7 +863,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             // * the collection is't full so `ptr.add(len)` is valid to write 1 element
             let len = self.len();
             self.set_len_unchecked(len.wrapping_add(1));
-            let ptr = self.raw.as_mut_ptr().add(index);
+            let ptr = self.storage.as_mut_ptr().add(index);
             ptr.add(1).copy_from(ptr, len.wrapping_sub(index));
             ptr.write(value);
             &mut *ptr
@@ -879,12 +878,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// * the collection's remaining capacity must be at least N
     /// * hte index must be in bounds
     #[cfg(feature = "nightly")]
-    pub unsafe fn insert_array_unchecked<const N: usize>(
-        &mut self,
-        index: usize,
-        value: [A::Item; N],
-    ) -> &mut [A::Item; N] {
-        match A::CONST_CAPACITY {
+    pub unsafe fn insert_array_unchecked<const N: usize>(&mut self, index: usize, value: [T; N]) -> &mut [T; N] {
+        match S::CONST_CAPACITY {
             Some(n) if n < N => {
                 panic!("Tried to push an array larger than the maximum capacity of the vector!")
             }
@@ -904,7 +899,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
 
             let out = ptr.add(index);
             out.add(N).copy_from(out, dist);
-            let out = out as *mut [A::Item; N];
+            let out = out as *mut [T; N];
             out.write(value);
             &mut *out
         }
@@ -915,8 +910,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Safety
     ///
     /// the collection must not be empty
-    pub unsafe fn pop_unchecked(&mut self) -> A::Item {
-        if Some(0) == A::CONST_CAPACITY {
+    pub unsafe fn pop_unchecked(&mut self) -> T {
+        if Some(0) == S::CONST_CAPACITY {
             panic!("Tried to remove an element from a zero-capacity vector!")
         }
 
@@ -942,8 +937,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// The collection must contain at least `N` elements in it
     #[cfg(feature = "nightly")]
-    pub unsafe fn pop_array_unchecked<const N: usize>(&mut self) -> [A::Item; N] {
-        match A::CONST_CAPACITY {
+    pub unsafe fn pop_array_unchecked<const N: usize>(&mut self) -> [T; N] {
+        match S::CONST_CAPACITY {
             Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),
             _ => (),
         }
@@ -961,7 +956,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         unsafe {
             let len = len.wrapping_sub(N);
             self.set_len_unchecked(len);
-            self.as_mut_ptr().add(len).cast::<[A::Item; N]>().read()
+            self.as_mut_ptr().add(len).cast::<[T; N]>().read()
         }
     }
 
@@ -972,8 +967,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// the collection must not be empty, and
     /// index must be in bounds
-    pub unsafe fn remove_unchecked(&mut self, index: usize) -> A::Item {
-        if Some(0) == A::CONST_CAPACITY {
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
+        if Some(0) == S::CONST_CAPACITY {
             panic!("Tried to remove an element from a zero-capacity vector!")
         }
 
@@ -992,7 +987,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         // * the collection isn't empty, so `ptr.add(len - index - 1)` is valid to read
         unsafe {
             self.set_len_unchecked(len.wrapping_sub(1));
-            let ptr = self.raw.as_mut_ptr().add(index);
+            let ptr = self.storage.as_mut_ptr().add(index);
             let value = ptr.read();
             ptr.copy_from(ptr.add(1), len.wrapping_sub(index).wrapping_sub(1));
             value
@@ -1007,8 +1002,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// the collection must contain at least N elements, and
     /// index must be in bounds
     #[cfg(feature = "nightly")]
-    pub unsafe fn remove_array_unchecked<const N: usize>(&mut self, index: usize) -> [A::Item; N] {
-        match A::CONST_CAPACITY {
+    pub unsafe fn remove_array_unchecked<const N: usize>(&mut self, index: usize) -> [T; N] {
+        match S::CONST_CAPACITY {
             Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),
             _ => (),
         }
@@ -1034,7 +1029,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         unsafe {
             self.set_len_unchecked(len.wrapping_sub(N));
             let ptr = self.as_mut_ptr().add(index);
-            let value = ptr.cast::<[A::Item; N]>().read();
+            let value = ptr.cast::<[T; N]>().read();
             if N != 0 {
                 ptr.copy_from(ptr.add(N), len.wrapping_sub(index).wrapping_sub(N));
             }
@@ -1051,8 +1046,8 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// # Safety
     ///
     /// the `index` must be in bounds
-    pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> A::Item {
-        if Some(0) == A::CONST_CAPACITY {
+    pub unsafe fn swap_remove_unchecked(&mut self, index: usize) -> T {
+        if Some(0) == S::CONST_CAPACITY {
             panic!("Tried to remove an element from a zero-capacity vector!")
         }
 
@@ -1063,7 +1058,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
         unsafe {
             let len = self.len();
             self.set_len_unchecked(len.wrapping_sub(1));
-            let ptr = self.raw.as_mut_ptr();
+            let ptr = self.storage.as_mut_ptr();
             let at = ptr.add(index);
             let end = ptr.add(len.wrapping_sub(1));
             let value = at.read();
@@ -1077,9 +1072,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Returns a newly allocated vector containing the elements in the range `[at, len)`.
     /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
-    pub fn split_off<B>(&mut self, index: usize) -> GenericVec<B>
+    pub fn split_off<B>(&mut self, index: usize) -> GenericVec<T, B>
     where
-        B: raw::StorageWithCapacity<Item = A::Item>,
+        B: raw::StorageWithCapacity<T>,
     {
         assert!(
             index <= self.len(),
@@ -1088,8 +1083,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
             self.len()
         );
 
-        let mut vec =
-            GenericVec::<B>::__with_capacity__const_capacity_checked(self.len().wrapping_sub(index), A::CONST_CAPACITY);
+        let mut vec = GenericVec::<T, B>::__with_capacity__const_capacity_checked(
+            self.len().wrapping_sub(index),
+            S::CONST_CAPACITY,
+        );
 
         self.split_off_into(index, &mut vec);
 
@@ -1101,9 +1098,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Appends the elements from the range `[at, len)` to `other`.
     /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
-    pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<B>)
+    pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<T, B>)
     where
-        B: raw::Storage<Item = A::Item> + ?Sized,
+        B: raw::Storage<T> + ?Sized,
     {
         assert!(
             index <= self.len(),
@@ -1126,9 +1123,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     }
 
     /// Convert the backing buffer type, and moves all the elements in `self` to the new vector
-    pub fn convert<B: raw::StorageWithCapacity<Item = A::Item>>(mut self) -> GenericVec<B>
+    pub fn convert<B: raw::StorageWithCapacity<T>>(mut self) -> GenericVec<T, B>
     where
-        A: Sized,
+        S: Sized,
     {
         self.split_off(0)
     }
@@ -1142,7 +1139,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
     #[inline]
-    pub fn raw_drain<R>(&mut self, range: R) -> RawDrain<'_, A>
+    pub fn raw_drain<R>(&mut self, range: R) -> RawDrain<'_, T, S>
     where
         R: RangeBounds<usize>,
     {
@@ -1161,7 +1158,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
     #[inline]
-    pub fn drain<R>(&mut self, range: R) -> Drain<'_, A>
+    pub fn drain<R>(&mut self, range: R) -> Drain<'_, T, S>
     where
         R: RangeBounds<usize>,
     {
@@ -1174,10 +1171,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// If the closure returns false, the element will remain in the vector
     /// and will not be yielded by the iterator.
     #[inline]
-    pub fn drain_filter<R, F>(&mut self, range: R, f: F) -> DrainFilter<'_, A, F>
+    pub fn drain_filter<R, F>(&mut self, range: R, f: F) -> DrainFilter<'_, T, S, F>
     where
         R: RangeBounds<usize>,
-        F: FnMut(&mut A::Item) -> bool,
+        F: FnMut(&mut T) -> bool,
     {
         DrainFilter::new(self.raw_drain(range), f)
     }
@@ -1190,10 +1187,10 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// The input iterator replace_with is only consumed when the Splice value is dropped
     #[inline]
-    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, A, I::IntoIter>
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, T, S, I::IntoIter>
     where
         R: RangeBounds<usize>,
-        I: IntoIterator<Item = A::Item>,
+        I: IntoIterator<Item = T>,
     {
         Splice::new(self.raw_drain(range), replace_with.into_iter())
     }
@@ -1206,7 +1203,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     #[inline]
     pub fn retain<F>(&mut self, f: F)
     where
-        F: FnMut(&mut A::Item) -> bool,
+        F: FnMut(&mut T) -> bool,
     {
         fn not<F: FnMut(&mut T) -> bool, T>(mut f: F) -> impl FnMut(&mut T) -> bool { move |value| !f(value) }
         self.drain_filter(.., not(f));
@@ -1218,7 +1215,7 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     ///
     /// You must not drop any of the elements in `slice`, and
     /// there must be at least `slice.len()` remaining capacity in the vector
-    pub unsafe fn extend_from_slice_unchecked(&mut self, slice: &[A::Item]) {
+    pub unsafe fn extend_from_slice_unchecked(&mut self, slice: &[T]) {
         debug_assert!(
             self.remaining_capacity() >= slice.len(),
             "Not enough capacity to hold the slice"
@@ -1241,9 +1238,9 @@ impl<A: ?Sized + Storage> GenericVec<A> {
     /// Note that this function is same as extend except that it is specialized
     /// to work with slices instead. If and when Rust gets specialization this
     /// function will likely be deprecated (but still available).
-    pub fn extend_from_slice(&mut self, slice: &[A::Item])
+    pub fn extend_from_slice(&mut self, slice: &[T])
     where
-        A::Item: Clone,
+        T: Clone,
     {
         self.reserve(self.len());
 

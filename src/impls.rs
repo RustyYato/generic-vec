@@ -7,9 +7,9 @@ use core::{
     slice::SliceIndex,
 };
 
-impl<A: StorageWithCapacity> Clone for GenericVec<A>
+impl<T, S: StorageWithCapacity<T>> Clone for GenericVec<T, S>
 where
-    A::Item: Clone,
+    T: Clone,
 {
     fn clone(&self) -> Self {
         let mut vec = Self::with_capacity(self.len());
@@ -25,62 +25,62 @@ where
     }
 }
 
-impl<A: crate::raw::StorageWithCapacity> Default for GenericVec<A> {
-    fn default() -> Self { Self::with_raw(Default::default()) }
+impl<T, S: StorageWithCapacity<T>> Default for GenericVec<T, S> {
+    fn default() -> Self { Self::with_storage(Default::default()) }
 }
 
-impl<S: ?Sized + AsRef<[A::Item]>, A: ?Sized + Storage> PartialEq<S> for GenericVec<A>
+impl<T, O: ?Sized + AsRef<[T]>, S: ?Sized + Storage<T>> PartialEq<O> for GenericVec<T, S>
 where
-    A::Item: PartialEq,
+    T: PartialEq,
 {
-    fn eq(&self, other: &S) -> bool { self.as_slice() == other.as_ref() }
+    fn eq(&self, other: &O) -> bool { self.as_slice() == other.as_ref() }
 }
 
-impl<A: ?Sized + Storage> Eq for GenericVec<A> where A::Item: Eq {}
+impl<T, S: ?Sized + Storage<T>> Eq for GenericVec<T, S> where T: Eq {}
 
-impl<S: ?Sized + AsRef<[A::Item]>, A: ?Sized + Storage> PartialOrd<S> for GenericVec<A>
+impl<T, O: ?Sized + AsRef<[T]>, S: ?Sized + Storage<T>> PartialOrd<O> for GenericVec<T, S>
 where
-    A::Item: PartialOrd,
+    T: PartialOrd,
 {
-    fn partial_cmp(&self, other: &S) -> Option<core::cmp::Ordering> { self.as_slice().partial_cmp(other.as_ref()) }
+    fn partial_cmp(&self, other: &O) -> Option<core::cmp::Ordering> { self.as_slice().partial_cmp(other.as_ref()) }
 }
 
-impl<A: ?Sized + Storage> Ord for GenericVec<A>
+impl<T, S: ?Sized + Storage<T>> Ord for GenericVec<T, S>
 where
-    A::Item: Ord,
+    T: Ord,
 {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering { self.as_slice().cmp(other.as_ref()) }
 }
 
-impl<A: ?Sized + Storage> Hash for GenericVec<A>
+impl<T, S: ?Sized + Storage<T>> Hash for GenericVec<T, S>
 where
-    A::Item: Hash,
+    T: Hash,
 {
     fn hash<H: Hasher>(&self, state: &mut H) { self.as_slice().hash(state) }
 }
 
 use core::fmt;
-impl<A: ?Sized + Storage> fmt::Debug for GenericVec<A>
+impl<T, S: ?Sized + Storage<T>> fmt::Debug for GenericVec<T, S>
 where
-    A::Item: fmt::Debug,
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.as_slice().fmt(f) }
 }
 
-impl<A: ?Sized + Storage> AsRef<[A::Item]> for GenericVec<A> {
-    fn as_ref(&self) -> &[A::Item] { self }
+impl<T, S: ?Sized + Storage<T>> AsRef<[T]> for GenericVec<T, S> {
+    fn as_ref(&self) -> &[T] { self }
 }
 
-impl<A: ?Sized + Storage> AsMut<[A::Item]> for GenericVec<A> {
-    fn as_mut(&mut self) -> &mut [A::Item] { self }
+impl<T, S: ?Sized + Storage<T>> AsMut<[T]> for GenericVec<T, S> {
+    fn as_mut(&mut self) -> &mut [T] { self }
 }
 
-impl<A: ?Sized + Storage> Borrow<[A::Item]> for GenericVec<A> {
-    fn borrow(&self) -> &[A::Item] { self }
+impl<T, S: ?Sized + Storage<T>> Borrow<[T]> for GenericVec<T, S> {
+    fn borrow(&self) -> &[T] { self }
 }
 
-impl<A: ?Sized + Storage> BorrowMut<[A::Item]> for GenericVec<A> {
-    fn borrow_mut(&mut self) -> &mut [A::Item] { self }
+impl<T, S: ?Sized + Storage<T>> BorrowMut<[T]> for GenericVec<T, S> {
+    fn borrow_mut(&mut self) -> &mut [T] { self }
 }
 
 #[cfg(feature = "nightly")]
@@ -93,18 +93,18 @@ impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
     fn from(array: [T; N]) -> Self { crate::InitArrayVec::<T, N>::new(array) }
 }
 
-impl<A: Storage + ?Sized, I> Index<I> for GenericVec<A>
+impl<T, S: Storage<T> + ?Sized, I> Index<I> for GenericVec<T, S>
 where
-    I: SliceIndex<[A::Item]>,
+    I: SliceIndex<[T]>,
 {
     type Output = I::Output;
 
     fn index(&self, index: I) -> &Self::Output { self.as_slice().index(index) }
 }
 
-impl<A: Storage + ?Sized, I> IndexMut<I> for GenericVec<A>
+impl<T, S: Storage<T> + ?Sized, I> IndexMut<I> for GenericVec<T, S>
 where
-    I: SliceIndex<[A::Item]>,
+    I: SliceIndex<[T]>,
 {
     fn index_mut(&mut self, index: I) -> &mut Self::Output { self.as_mut_slice().index_mut(index) }
 }

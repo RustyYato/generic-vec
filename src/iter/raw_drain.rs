@@ -6,17 +6,17 @@ use core::{
 };
 
 /// This struct is created by [`GenericVec::raw_drain`]. See its documentation for more.
-pub struct RawDrain<'a, A: ?Sized + Storage> {
-    vec: *mut GenericVec<A>,
+pub struct RawDrain<'a, T, S: ?Sized + Storage<T>> {
+    vec: *mut GenericVec<T, S>,
     old_vec_len: usize,
-    write_front: *mut A::Item,
-    read_front: *mut A::Item,
-    read_back: *mut A::Item,
-    write_back: *mut A::Item,
-    mark: PhantomData<&'a mut GenericVec<A>>,
+    write_front: *mut T,
+    read_front: *mut T,
+    read_back: *mut T,
+    write_back: *mut T,
+    mark: PhantomData<&'a mut GenericVec<T, S>>,
 }
 
-impl<A: ?Sized + Storage> Drop for RawDrain<'_, A> {
+impl<T, S: ?Sized + Storage<T>> Drop for RawDrain<'_, T, S> {
     fn drop(&mut self) {
         unsafe {
             self.skip_n_front(self.remaining());
@@ -97,17 +97,17 @@ pub(crate) fn check_range<R: RangeBounds<usize>>(len: usize, range: R) -> core::
     start..end
 }
 
-impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
-    pub(crate) const IS_ZS: bool = core::mem::size_of::<A::Item>() == 0;
-    const ZS_PTR: *mut A::Item = NonNull::<A::Item>::dangling().as_ptr();
+impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
+    pub(crate) const IS_ZS: bool = core::mem::size_of::<T>() == 0;
+    const ZS_PTR: *mut T = NonNull::<T>::dangling().as_ptr();
 
     #[inline]
-    pub(crate) fn new<R>(vec: &'a mut GenericVec<A>, range: R) -> Self
+    pub(crate) fn new<R>(vec: &'a mut GenericVec<T, S>, range: R) -> Self
     where
         R: RangeBounds<usize>,
     {
         unsafe {
-            let raw_vec = vec as *mut GenericVec<A>;
+            let raw_vec = vec as *mut GenericVec<T, S>;
             let vec = &mut *raw_vec;
             let old_vec_len = vec.len();
 
@@ -168,7 +168,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must not be complete
     #[inline]
-    pub unsafe fn front(&mut self) -> &mut A::Item {
+    pub unsafe fn front(&mut self) -> &mut T {
         if Self::IS_ZS {
             unsafe { &mut *Self::ZS_PTR }
         } else {
@@ -184,7 +184,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must not be complete
     #[inline]
-    pub unsafe fn back(&mut self) -> &mut A::Item {
+    pub unsafe fn back(&mut self) -> &mut T {
         if Self::IS_ZS {
             unsafe { &mut *Self::ZS_PTR }
         } else {
@@ -199,7 +199,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must not be complete
     #[inline]
-    pub unsafe fn take_front(&mut self) -> A::Item {
+    pub unsafe fn take_front(&mut self) -> T {
         debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
 
         unsafe {
@@ -221,7 +221,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must not be complete
     #[inline]
-    pub unsafe fn take_back(&mut self) -> A::Item {
+    pub unsafe fn take_back(&mut self) -> T {
         debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
 
         unsafe {
@@ -249,7 +249,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
             if Self::IS_ZS {
                 self.skip_n_front(1);
             } else {
-                if self.write_front as *const A::Item != self.read_front {
+                if self.write_front as *const T != self.read_front {
                     self.write_front.copy_from_nonoverlapping(self.read_front, 1);
                 }
                 self.read_front = self.read_front.add(1);
@@ -274,7 +274,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
             } else {
                 self.read_back = self.read_back.sub(1);
                 self.write_back = self.write_back.sub(1);
-                if self.write_back as *const A::Item != self.read_back {
+                if self.write_back as *const T != self.read_back {
                     self.write_back.copy_from_nonoverlapping(self.read_back, 1);
                 }
             }
@@ -296,7 +296,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
                 self.read_front = (self.read_front as usize).wrapping_add(n) as _;
                 self.write_front = (self.write_front as usize).wrapping_add(n) as _;
             } else {
-                if self.write_front as *const A::Item != self.read_front {
+                if self.write_front as *const T != self.read_front {
                     self.write_front.copy_from(self.read_front, n);
                 }
                 self.read_front = self.read_front.add(n);
@@ -322,7 +322,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
             } else {
                 self.read_back = self.read_back.sub(n);
                 self.write_back = self.write_back.sub(n);
-                if self.write_back as *const A::Item != self.read_back {
+                if self.write_back as *const T != self.read_back {
                     self.write_back.copy_from(self.read_back, n);
                 }
             }
@@ -336,7 +336,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must have taken at least 1 more element than it has
     /// written from the front
-    pub unsafe fn consume_write_front(&mut self, value: A::Item) {
+    pub unsafe fn consume_write_front(&mut self, value: T) {
         if Self::IS_ZS {
             core::mem::forget(value);
             self.write_front = (self.write_front as usize).wrapping_add(1) as _;
@@ -355,7 +355,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must have taken at least 1 more element than it has
     /// written from the back
-    pub unsafe fn consume_write_back(&mut self, value: A::Item) {
+    pub unsafe fn consume_write_back(&mut self, value: T) {
         if Self::IS_ZS {
             core::mem::forget(value);
             self.write_back = (self.write_back as usize).wrapping_sub(1) as _;
@@ -374,7 +374,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must have taken at least `slice.len()` more element than it has
     /// written from the front
-    pub unsafe fn consume_write_slice_front(&mut self, slice: &[A::Item]) {
+    pub unsafe fn consume_write_slice_front(&mut self, slice: &[T]) {
         unsafe {
             if Self::IS_ZS {
                 self.write_front = (self.write_front as usize).wrapping_add(slice.len()) as _;
@@ -392,7 +392,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
     ///
     /// The `RawDrain` must have taken at least `slice.len()` more element than it has
     /// written from the back
-    pub unsafe fn consume_write_slice_back(&mut self, slice: &[A::Item]) {
+    pub unsafe fn consume_write_slice_back(&mut self, slice: &[T]) {
         unsafe {
             if Self::IS_ZS {
                 self.write_back = (self.write_back as usize).wrapping_sub(slice.len()) as _;
@@ -444,7 +444,7 @@ impl<'a, A: ?Sized + Storage> RawDrain<'a, A> {
                     let rb = self.read_back.offset_from(range.start) as usize;
 
                     let vec = &mut *self.vec;
-                    vec.raw.reserve(len + space);
+                    vec.storage.reserve(len + space);
 
                     let start = vec.as_mut_ptr();
                     self.write_front = start.add(wf);

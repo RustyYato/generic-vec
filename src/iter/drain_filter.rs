@@ -4,43 +4,43 @@ use core::iter::FusedIterator;
 
 /// This struct is created by [`GenericVec::drain_filter`](crate::GenericVec::drain_filter).
 /// See its documentation for more.
-pub struct DrainFilter<'a, A, F>
+pub struct DrainFilter<'a, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
-    raw: RawDrain<'a, A>,
+    raw: RawDrain<'a, T, S>,
     filter: F,
 }
 
-impl<'a, A, F> DrainFilter<'a, A, F>
+impl<'a, T, S, F> DrainFilter<'a, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
-    pub(crate) fn new(raw: RawDrain<'a, A>, filter: F) -> Self { Self { raw, filter } }
+    pub(crate) fn new(raw: RawDrain<'a, T, S>, filter: F) -> Self { Self { raw, filter } }
 }
 
-impl<A, F> Drop for DrainFilter<'_, A, F>
+impl<T, S, F> Drop for DrainFilter<'_, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
     fn drop(&mut self) { self.for_each(drop); }
 }
 
-impl<A, F> FusedIterator for DrainFilter<'_, A, F>
+impl<T, S, F> FusedIterator for DrainFilter<'_, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
 }
-impl<A, F> Iterator for DrainFilter<'_, A, F>
+impl<T, S, F> Iterator for DrainFilter<'_, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
-    type Item = A::Item;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -65,10 +65,10 @@ where
     }
 }
 
-impl<A, F> DoubleEndedIterator for DrainFilter<'_, A, F>
+impl<T, S, F> DoubleEndedIterator for DrainFilter<'_, T, S, F>
 where
-    A: ?Sized + Storage,
-    F: FnMut(&mut A::Item) -> bool,
+    S: ?Sized + Storage<T>,
+    F: FnMut(&mut T) -> bool,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
