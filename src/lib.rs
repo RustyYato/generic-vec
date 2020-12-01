@@ -7,7 +7,8 @@
         min_specialization,
         exact_size_is_empty,
         allocator_api,
-        alloc_layout_extra
+        alloc_layout_extra,
+        const_panic
     )
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
@@ -371,12 +372,17 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// `additional` more elements
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
+        #[cold]
+        #[inline(never)]
+        fn allocation_failure(additional: usize) -> ! {
+            panic!("Tried to allocate: {} more space and failed", additional)
+        }
+
         if self.remaining_capacity() < additional {
-            self.storage.reserve(
-                self.len()
-                    .checked_add(additional)
-                    .expect("Allocation overflow detected"),
-            )
+            self.storage.reserve(match self.len().checked_add(additional) {
+                Some(new_capacity) => new_capacity,
+                None => allocation_failure(additional),
+            })
         }
     }
 
@@ -507,12 +513,15 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// * May panic or reallocate if the collection is full
     /// * Panics if index > len.
     pub fn insert(&mut self, index: usize, value: T) -> &mut T {
-        assert!(
-            index <= self.len(),
-            "Tried to insert at {}, but length is {}",
-            index,
-            self.len(),
-        );
+        #[cold]
+        #[inline(never)]
+        fn insert_fail(index: usize, len: usize) -> ! {
+            panic!("Tried to insert at {}, but length is {}", index, len);
+        }
+
+        if index > self.len() {
+            insert_fail(index, self.len())
+        }
 
         if self.is_full() {
             self.reserve(1);
@@ -534,12 +543,18 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// * Panics if index > len.
     #[cfg(feature = "nightly")]
     pub fn insert_array<const N: usize>(&mut self, index: usize, value: [T; N]) -> &mut [T; N] {
-        assert!(
-            index <= self.len(),
-            "Tried to insert at {}, but length is {}",
-            index,
-            self.len(),
-        );
+        #[cold]
+        #[inline(never)]
+        fn insert_array_fail(index: usize, size: usize, len: usize) -> ! {
+            panic!(
+                "Tried to insert array of length {} at {}, but length is {}",
+                size, index, len
+            );
+        }
+
+        if index > self.len() {
+            insert_array_fail(index, N, self.len())
+        }
 
         self.reserve(N);
 
@@ -556,7 +571,15 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// Panics if the collection is empty
     pub fn pop(&mut self) -> T {
-        assert_ne!(self.len(), 0, "Tried to pop an element from an empty vector",);
+        #[cold]
+        #[inline(never)]
+        fn pop_fail() -> ! {
+            panic!("Tried to pop an element from an empty vector",);
+        }
+
+        if self.is_empty() {
+            pop_fail()
+        }
 
         // Safety
         //
@@ -571,12 +594,15 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Panics if the collection contains less than `N` elements in it
     #[cfg(feature = "nightly")]
     pub fn pop_array<const N: usize>(&mut self) -> [T; N] {
-        assert!(
-            self.len() >= N,
-            "Tried to pop {} elements, but length is {}",
-            N,
-            self.len()
-        );
+        #[cold]
+        #[inline(never)]
+        fn pop_array_fail(size: usize, len: usize) -> ! {
+            panic!("Tried to pop an array of size {}, a vector of length {}", size, len);
+        }
+
+        if self.len() < N {
+            pop_array_fail(N, self.len())
+        }
 
         // Safety
         //
@@ -591,12 +617,15 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// Panics if `index` is out of bounds.
     pub fn remove(&mut self, index: usize) -> T {
-        assert!(
-            index < self.len(),
-            "Tried to remove item at index {}, but length is {}",
-            index,
-            self.len()
-        );
+        #[cold]
+        #[inline(never)]
+        fn remove_fail(index: usize, len: usize) -> ! {
+            panic!("Tried to remove an element at {}, but length is {}", index, len);
+        }
+
+        if index > self.len() {
+            remove_fail(index, self.len())
+        }
 
         // Safety
         //
@@ -612,13 +641,18 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Panics if `index` is out of bounds or if `index + N > len()`
     #[cfg(feature = "nightly")]
     pub fn remove_array<const N: usize>(&mut self, index: usize) -> [T; N] {
-        assert!(
-            self.len() >= index && self.len().wrapping_sub(index) >= N,
-            "Tried to remove {} elements at index {}, but length is {}",
-            N,
-            index,
-            self.len()
-        );
+        #[cold]
+        #[inline(never)]
+        fn remove_array_fail(index: usize, size: usize, len: usize) -> ! {
+            panic!(
+                "Tried to remove an array length {} at {}, but length is {}",
+                size, index, len
+            );
+        }
+
+        if self.len() < index || self.len().wrapping_sub(index) < N {
+            remove_array_fail(index, N, self.len())
+        }
 
         // Safety
         //
@@ -638,12 +672,15 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// Panics if `index` is out of bounds.
     pub fn swap_remove(&mut self, index: usize) -> T {
-        assert!(
-            index < self.len(),
-            "Tried to remove item at index {}, but length is {}",
-            index,
-            self.len()
-        );
+        #[cold]
+        #[inline(never)]
+        fn swap_remove_fail(index: usize, len: usize) -> ! {
+            panic!("Tried to remove an element at {}, but length is {}", index, len);
+        }
+
+        if index > self.len() {
+            swap_remove_fail(index, self.len())
+        }
 
         // Safety
         //

@@ -9,6 +9,9 @@ pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
 /// An initialized array storage
 pub type Array<T, const N: usize> = Init<[T; N]>;
 
+unsafe impl<T, const N: usize> Send for UninitArray<T, N> {}
+unsafe impl<T, const N: usize> Sync for UninitArray<T, N> {}
+
 impl<T, const N: usize> UninitArray<T, N> {
     /// Create a new uninitialized array storage
     pub const fn uninit() -> Self { Self(MaybeUninit::uninit()) }
@@ -41,11 +44,9 @@ impl<T: Copy, const N: usize> Clone for Array<T, N> {
 
 impl<U, T, const N: usize> StorageWithCapacity<U> for UninitArray<T, N> {
     fn with_capacity(capacity: usize) -> Self {
-        assert!(
-            capacity <= N,
-            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> Storage",
-            N,
-        );
+        if capacity > N {
+            crate::raw::fixed_capacity_reserve_error(N, capacity)
+        }
 
         Self::default()
     }
@@ -63,9 +64,9 @@ impl<U, T, const N: usize> StorageWithCapacity<U> for UninitArray<T, N> {
 
 unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
     #[doc(hidden)]
-    const CONST_CAPACITY: Option<usize> = Some(N * size_of::<T>() / size_of::<U>());
+    const CONST_CAPACITY: Option<usize> = Some(crate::raw::capacity(N, size_of::<T>(), size_of::<U>()));
 
-    fn is_valid_storage() -> bool { crate::raw::is_compatible::<T, U>() }
+    fn is_valid_storage() -> bool { true }
 
     fn capacity(&self) -> usize { <Self as Storage<U>>::CONST_CAPACITY.unwrap() }
 
@@ -73,11 +74,11 @@ unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
 
     fn as_mut_ptr(&mut self) -> *mut U { self.0.as_mut_ptr().cast() }
 
-    fn reserve(&mut self, capacity: usize) {
-        assert!(
-            capacity <= N,
-            "Cannot allocate more space when using an array-backed vector"
-        )
+    fn reserve(&mut self, new_capacity: usize) {
+        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        if new_capacity > N {
+            crate::raw::fixed_capacity_reserve_error(N, new_capacity)
+        }
     }
 
     fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {
@@ -92,11 +93,9 @@ unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
 unsafe impl<T: Copy, const N: usize> crate::raw::StorageInit<T> for Array<T, N> {}
 impl<T: Default + Copy, const N: usize> StorageWithCapacity<T> for Array<T, N> {
     fn with_capacity(capacity: usize) -> Self {
-        assert!(
-            capacity <= N,
-            "Cannot allocate more than {0} elements when using an UninitArray<T, {0}> Storage",
-            N,
-        );
+        if capacity > N {
+            crate::raw::fixed_capacity_reserve_error(N, capacity)
+        }
 
         Self::default()
     }
@@ -125,10 +124,9 @@ unsafe impl<T: Copy, const N: usize> Storage<T> for Array<T, N> {
     fn as_mut_ptr(&mut self) -> *mut T { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
-        assert!(
-            capacity <= N,
-            "Cannot allocate more space when using an array-backed vector"
-        )
+        if capacity > N {
+            crate::raw::fixed_capacity_reserve_error(N, capacity)
+        }
     }
 
     fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {

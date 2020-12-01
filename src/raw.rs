@@ -34,6 +34,55 @@ pub struct Init<T: ?Sized>(pub T);
 #[repr(transparent)]
 pub struct Uninit<T: ?Sized>(pub(crate) T);
 
+#[cold]
+#[inline(never)]
+#[cfg(feature = "nightly")]
+const fn capacity_calculation_overflow() -> ! { panic!("Tried to calculate the current capacity, but overflowed") }
+
+#[cold]
+#[inline(never)]
+fn fixed_capacity_reserve_error(capacity: usize, new_capacity: usize) -> ! {
+    panic!(
+        "Tried to reserve {}, but used a fixed capacity buffer of {}",
+        new_capacity, capacity
+    )
+}
+
+#[cfg(not(any(
+    target_pointer_width = "8",
+    target_pointer_width = "16",
+    target_pointer_width = "32",
+    target_pointer_width = "64"
+)))]
+compile_error!("Cannot correctly calculate capacity on an 128-bit or larger architecture");
+
+const fn capacity(old_capacity: usize, size_self: usize, size_other: usize) -> usize {
+    #[cfg(target_pointer_width = "8")]
+    type PointerNext = u16;
+    #[cfg(target_pointer_width = "16")]
+    type PointerNext = u32;
+    #[cfg(target_pointer_width = "32")]
+    type PointerNext = u64;
+    #[cfg(target_pointer_width = "64")]
+    type PointerNext = u128;
+
+    let size = (old_capacity as PointerNext) * (size_self as PointerNext) / (size_other as PointerNext);
+
+    #[cfg(not(feature = "nightly"))]
+    {
+        [size as usize][(size > usize::MAX as PointerNext) as usize]
+    }
+
+    #[cfg(feature = "nightly")]
+    {
+        if size > usize::MAX as PointerNext {
+            capacity_calculation_overflow()
+        }
+
+        size as usize
+    }
+}
+
 impl<T> Uninit<T> {
     /// Create a new `Uninit` storage
     pub fn new(value: T) -> Self { Self(value) }

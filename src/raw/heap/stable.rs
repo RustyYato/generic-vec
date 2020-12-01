@@ -1,6 +1,6 @@
 use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
-use core::{alloc::Layout, ptr::NonNull};
+use core::{alloc::Layout, mem::size_of, ptr::NonNull};
 use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
 doc_heap! {
@@ -53,12 +53,14 @@ unsafe impl<T, U> Storage<U> for Heap<T> {
     fn as_mut_ptr(&mut self) -> *mut U { self.ptr.as_ptr().cast() }
 
     fn reserve(&mut self, new_capacity: usize) {
+        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
         if self.capacity < new_capacity {
             let _ = self.reserve_slow(new_capacity, OnFailure::Abort);
         }
     }
 
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> {
+        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
         if self.capacity < new_capacity {
             self.reserve_slow(new_capacity, OnFailure::Error)
         } else {
