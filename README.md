@@ -86,6 +86,22 @@ Finally a `HeapVec` is just `Vec`, but built atop `GenericVec`,
 meaning you get all the features of `GenericVec` for free! But this
 requries either the `alloc` or `std` feature to be enabled.
 
+As a neat side-effect of this framework, you can also get an efficient
+`GenericVec` for zero-sized types, just a `usize` in size! This feature
+can be on stable `no_std`.
+
+```rust
+use generic_vec::ZSVec;
+
+struct MyType;
+
+let mut vec = ZSVec::new();
+vec.push(MyType);
+vec.push(MyType);
+vec.push(MyType);
+assert_eq!(vec.len(), 3);
+assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
+```
 
 Current version: 0.1.1
 

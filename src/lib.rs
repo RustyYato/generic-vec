@@ -104,6 +104,22 @@
 //! meaning you get all the features of [`GenericVec`] for free! But this
 //! requries either the `alloc` or `std` feature to be enabled.
 //!
+//! As a neat side-effect of this framework, you can also get an efficient
+//! [`GenericVec`] for zero-sized types, just a `usize` in size! This feature
+//! can be on stable `no_std`.
+//!
+//! ```rust
+//! use generic_vec::ZSVec;
+//!
+//! struct MyType;
+//!
+//! let mut vec = ZSVec::new();
+//! vec.push(MyType);
+//! vec.push(MyType);
+//! vec.push(MyType);
+//! assert_eq!(vec.len(), 3);
+//! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
+//! ```
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -145,6 +161,8 @@ pub type SliceVec<'a, T> = GenericVec<T, raw::UninitSlice<'a, T>>;
 pub type InitArrayVec<T, const N: usize> = GenericVec<T, raw::Array<T, N>>;
 /// An slice backed vector backed by initialized memory
 pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
+/// A counter vector that can only store zero-sized types
+pub type ZSVec<T> = GenericVec<T, raw::ZeroSized<T>>;
 
 use iter::{Drain, DrainFilter, RawDrain, Splice};
 
@@ -359,6 +377,18 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
             mark: PhantomData,
         }
     }
+}
+
+impl<T> ZSVec<T> {
+    /// Create a new counter vector
+    pub const NEW: Self = Self {
+        len: 0,
+        storage: raw::ZeroSized::NEW,
+        mark: PhantomData,
+    };
+
+    /// Create a new counter vector
+    pub const fn new() -> Self { Self::NEW }
 }
 
 impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {

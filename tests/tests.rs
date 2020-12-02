@@ -139,3 +139,39 @@ mod init_slice_vec {
 
     make_tests_files!(copy_only);
 }
+
+#[cfg(feature = "std")]
+mod zero_sized {
+    use core::cell::Cell;
+    use generic_vec::ZSVec;
+
+    struct OnDrop;
+
+    thread_local! {
+        static COUNTER: Cell<u32> = Cell::new(0);
+    }
+
+    fn start() { COUNTER.with(|x| x.set(0)); }
+
+    fn get() -> u32 { COUNTER.with(|x| x.get()) }
+
+    impl Drop for OnDrop {
+        fn drop(&mut self) { COUNTER.with(|x| x.set(x.get() + 1)) }
+    }
+
+    #[test]
+    fn zero_sized() {
+        start();
+
+        let mut vec = ZSVec::new();
+
+        vec.push(OnDrop);
+        vec.push(OnDrop);
+        vec.push(OnDrop);
+
+        assert_eq!(vec.len(), 3);
+        assert_eq!(get(), 0);
+        drop(vec);
+        assert_eq!(get(), 3);
+    }
+}
