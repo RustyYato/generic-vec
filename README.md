@@ -11,14 +11,14 @@ that are only in `nightly` on `std` (like `GenericVec::drain_filter`), or a more
 interface like `GenericVec::retain`. In fact, you can trivially convert a `Vec` to a
 `HeapVec` and back!
 
-This crate is `no_std` compatible.
+This crate is `no_std` compatible, just turn off all default features.
 
 ## Features
 
 * `std` (default) - enables you to use an allocator, and
 * `alloc` - enables you to use an allocator, for heap allocated storages
     (like `Vec`)
-* `nightly` - enables you to use array (`T; N`) based storages
+* `nightly` - enables you to use array (`[T; N]`) based storages
 
 ## Basic Usage
 
@@ -29,7 +29,7 @@ them.
 * You can pass an uninitialized buffer to `SliceVec`
 * You can only use `Copy` types with `InitSliceVec`
 * You can freely set the length of the `InitSliceVec` as long as you stay
-    within it's capacity
+    within it's capacity (the length of the slice you pass in)
 
 ```rust
 use generic_vec::{SliceVec, InitSliceVec, uninit_array};
@@ -39,11 +39,11 @@ let mut slice_vec = SliceVec::new(&mut uninit_buffer);
 
 assert!(slice_vec.is_empty());
 slice_vec.push(10);
-assert_eq!(slice_vec, 10);
+assert_eq!(slice_vec, [10]);
 ```
 
 ```rust
-let mut init_buffer = 0xae; 16;
+let mut init_buffer = [0xae; 16];
 let mut slice_vec = InitSliceVec::new(&mut init_buffer);
 
 assert!(slice_vec.is_full());
@@ -56,7 +56,7 @@ Of course if you try to push past a `*SliceVec`'s capacity
 (the length of the slice you passed in), then it will panic.
 
 ```rust
-let mut init_buffer = 0xae; 16;
+let mut init_buffer = [0xae; 16];
 let mut slice_vec = InitSliceVec::new(&mut init_buffer);
 slice_vec.push(0);
 ```
@@ -76,10 +76,10 @@ array_vec.push(10);
 array_vec.push(20);
 array_vec.push(30);
 
-assert_eq!(array_vec, 10, 20, 30);
+assert_eq!(array_vec, [10, 20, 30]);
 ```
 
-The ditinction between `ArrayVec` and `InitArrayVec`
+The distinction between `ArrayVec` and `InitArrayVec`
 is identical to their slice counterparts.
 
 Finally a `HeapVec` is just `Vec`, but built atop `GenericVec`,
@@ -89,4 +89,4 @@ requries either the `alloc` or `std` feature to be enabled.
 
 Current version: 0.1.0-alpha
 
-License: MIT/Apache License 2.0
+License: MIT/Apache-2.0
