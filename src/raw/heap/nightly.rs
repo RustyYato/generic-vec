@@ -1,6 +1,10 @@
 use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
-use core::{alloc::Layout, mem::size_of, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    mem::{size_of, ManuallyDrop},
+    ptr::NonNull,
+};
 use std::alloc::handle_alloc_error;
 
 #[cfg(feature = "nightly")]
@@ -42,16 +46,66 @@ impl<T> Heap<T> {
             alloc: Global,
         }
     }
+
+    /// Create a new `Heap<T>`storage from the given pointer and capacity
+    ///
+    /// # Safety
+    ///
+    /// If the capacity is non-zero
+    /// * You must have allocated the pointer from the [`Global`] allocator
+    /// * The pointer must be valid to read-write for the range `ptr..ptr.add(capacity)`
+    pub const unsafe fn from_raw_parts(ptr: NonNull<T>, capacity: usize) -> Self {
+        Self {
+            ptr,
+            capacity,
+            alloc: Global,
+        }
+    }
+
+    /// Convert a `Heap` storage into a pointer and capacity, without
+    /// deallocating the storage
+    pub const fn into_raw_parts(self) -> (NonNull<T>, usize) {
+        let Self { ptr, capacity, .. } = self;
+        core::mem::forget(self);
+        (ptr, capacity)
+    }
 }
 
 impl<T, A: AllocRef> Heap<T, A> {
     /// Create a new zero-capacity heap vector with the given allocator
-    pub fn with_alloc(alloc: A) -> Self {
+    pub const fn with_alloc(alloc: A) -> Self {
         Self {
             ptr: NonNull::dangling(),
             capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
             alloc,
         }
+    }
+
+    /// Create a new `Heap<T>`storage from the given pointer and capacity
+    ///
+    /// # Safety
+    ///
+    /// If the capacity is non-zero
+    /// * You must have allocated the pointer from the given allocator
+    /// * The pointer must be valid to read-write for the range `ptr..ptr.add(capacity)`
+    pub const unsafe fn from_raw_parts_in(ptr: NonNull<T>, capacity: usize, alloc: A) -> Self {
+        Self { ptr, capacity, alloc }
+    }
+
+    /// Convert a `Heap` storage into a pointer and capacity, without
+    /// deallocating the storage
+    pub fn into_raw_parts_with_alloc(self) -> (NonNull<T>, usize, A) {
+        #[repr(C)]
+        #[allow(dead_code)]
+        struct HeapRepr<T, A: AllocRef> {
+            capacity: usize,
+            ptr: NonNull<T>,
+            alloc: A,
+        }
+
+        let HeapRepr { ptr, capacity, alloc } = unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) };
+
+        (ptr, capacity, alloc)
     }
 }
 

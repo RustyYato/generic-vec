@@ -12,16 +12,16 @@ use std::boxed::Box;
 #[cfg(not(feature = "nightly"))]
 pub struct AllocError;
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 mod array;
 #[cfg(feature = "alloc")]
 mod heap;
 mod slice;
 mod zero_sized;
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 pub use array::{Array, UninitArray};
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 pub use heap::Heap;
 
 pub use slice::{Slice, UninitSlice};

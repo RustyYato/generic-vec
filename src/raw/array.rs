@@ -1,8 +1,5 @@
-use crate::raw::{Init, Storage, StorageWithCapacity, Uninit};
-use core::{
-    alloc::AllocError,
-    mem::{size_of, MaybeUninit},
-};
+use crate::raw::{AllocError, Init, Storage, StorageWithCapacity, Uninit};
+use core::mem::{size_of, MaybeUninit};
 
 /// An uninitialized array storage
 pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;

@@ -1,25 +1,107 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "nightly", feature(min_const_generics, unsafe_block_in_unsafe_fn))]
+#![cfg_attr(not(any(doc, feature = "std")), no_std)]
 #![cfg_attr(
-    feature = "nightly",
+    any(doc, feature = "nightly"),
+    feature(min_const_generics, unsafe_block_in_unsafe_fn)
+)]
+#![cfg_attr(
+    any(doc, feature = "nightly"),
     feature(
         trusted_len,
         min_specialization,
         exact_size_is_empty,
         allocator_api,
         alloc_layout_extra,
-        const_panic
+        const_panic,
+        const_fn,
     )
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
 #![allow(unused_unsafe)]
 #![forbid(missing_docs, clippy::missing_safety_doc)]
 
-//! generic-vec
-//!
 //! A vector that can store items anywhere: in slices, arrays, or the heap!
 //!
+//! [`GenericVec`] has complete parity with [`Vec`], and even provides some features
+//! that are only in `nightly` on `std` (like [`GenericVec::drain_filter`]), or a more permissive
+//! interface like [`GenericVec::retain`]. In fact, you can trivially convert a [`Vec`] to a
+//! [`HeapVec`] and back!
 //!
+//! This crate is `no_std` compatible.
+//!
+//! # Features
+//!
+//! * `std` (default) - enables you to use an allocator, and
+//! * `alloc` - enables you to use an allocator, for heap allocated storages
+//!     (like [`Vec`])
+//! * `nightly` - enables you to use array (`[T; N]`) based storages
+//!
+//! # Basic Usage
+//!
+//! On stable `no_std` you have two choices on for which storage you can use
+//! [`SliceVec`] or [`InitSliceVec`]. There are three major differences between
+//! them.
+//!
+//! * You can pass an uninitialized buffer to [`SliceVec`]
+//! * You can only use [`Copy`] types with [`InitSliceVec`]
+//! * You can freely set the length of the [`InitSliceVec`] as long as you stay
+//!     within it's capacity
+//!
+//! ```rust
+//! use generic_vec::{SliceVec, InitSliceVec, uninit_array};
+//!
+//! let mut uninit_buffer = uninit_array!(16);
+//! let mut slice_vec = SliceVec::new(&mut uninit_buffer);
+//!
+//! assert!(slice_vec.is_empty());
+//! slice_vec.push(10);
+//! assert_eq!(slice_vec, [10]);
+//! ```
+//!
+//! ```rust
+//! # use generic_vec::InitSliceVec;
+//! let mut init_buffer = [0xae; 16];
+//! let mut slice_vec = InitSliceVec::new(&mut init_buffer);
+//!
+//! assert!(slice_vec.is_full());
+//! assert_eq!(slice_vec.pop(), 0xae);
+//! slice_vec.set_len(16);
+//! assert!(slice_vec.is_full());
+//! ```
+//!
+//! Of course if you try to push past a `*SliceVec`'s capacity
+//! (the length of the slice you passed in), then it will panic.
+//!
+//! ```rust,should_panic
+//! # use generic_vec::InitSliceVec;
+//! let mut init_buffer = [0xae; 16];
+//! let mut slice_vec = InitSliceVec::new(&mut init_buffer);
+//! slice_vec.push(0);
+//! ```
+//!
+//! If you enable the nightly feature then you gain access to
+//! [`ArrayVec`] and [`InitArrayVec`]. These are just like the
+//! slice versions, but since they own their data, they can be
+//! freely moved around, unconstrained. You can also create
+//! a new [`ArrayVec`] without passing in an existing buffer.
+//!
+//! ```rust
+//! use generic_vec::ArrayVec;
+//!
+//! let mut array_vec = ArrayVec::<i32, 16>::new();
+//!
+//! array_vec.push(10);
+//! array_vec.push(20);
+//! array_vec.push(30);
+//!
+//! assert_eq!(array_vec, [10, 20, 30]);
+//! ```
+//!
+//! The ditinction between [`ArrayVec`] and [`InitArrayVec`]
+//! is identical to their slice counterparts.
+//!
+//! Finally a [`HeapVec`] is just [`Vec`], but built atop [`GenericVec`],
+//! meaning you get all the features of [`GenericVec`] for free! But this
+//! requries either the `alloc` or `std` feature to be enabled.
 //!
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
@@ -42,23 +124,23 @@ pub mod raw;
 use raw::Storage;
 
 /// A heap backed vector with a growable capacity
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 #[cfg(feature = "nightly")]
-pub type Vec<T, A = std::alloc::Global> = GenericVec<T, raw::Heap<T, A>>;
+pub type HeapVec<T, A = std::alloc::Global> = GenericVec<T, raw::Heap<T, A>>;
 
 /// A heap backed vector with a growable capacity
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 #[cfg(not(feature = "nightly"))]
-pub type Vec<T> = GenericVec<T, raw::Heap<T>>;
+pub type HeapVec<T> = GenericVec<T, raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 pub type ArrayVec<T, const N: usize> = GenericVec<T, raw::UninitArray<T, N>>;
 /// An slice backed vector backed by potentially uninitialized memory
 pub type SliceVec<'a, T> = GenericVec<T, raw::UninitSlice<'a, T>>;
 
 /// An array backed vector backed by initialized memory
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 pub type InitArrayVec<T, const N: usize> = GenericVec<T, raw::Array<T, N>>;
 /// An slice backed vector backed by initialized memory
 pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
@@ -205,8 +287,8 @@ impl<T: Copy, const N: usize> InitArrayVec<T, N> {
 }
 
 #[cfg(feature = "alloc")]
-impl<T> Vec<T> {
-    /// Create a new empty `Vec`
+impl<T> HeapVec<T> {
+    /// Create a new empty `HeapVec`
     pub const fn new() -> Self {
         Self {
             len: 0,
@@ -218,8 +300,8 @@ impl<T> Vec<T> {
 
 #[cfg(feature = "alloc")]
 #[cfg(feature = "nightly")]
-impl<T, A: std::alloc::AllocRef> Vec<T, A> {
-    /// Create a new empty `Vec` with the given allocator
+impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
+    /// Create a new empty `HeapVec` with the given allocator
     pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
 }
 

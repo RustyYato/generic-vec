@@ -1,11 +1,16 @@
 use crate::{raw::StorageWithCapacity, GenericVec, Storage};
 
+#[allow(unused_imports)]
 use core::{
     borrow::{Borrow, BorrowMut},
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
+    ptr::NonNull,
     slice::SliceIndex,
 };
+
+#[cfg(feature = "alloc")]
+use std::vec::Vec;
 
 impl<T, S: StorageWithCapacity<T>> Clone for GenericVec<T, S>
 where
@@ -91,6 +96,57 @@ impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
 #[cfg(feature = "nightly")]
 impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
     fn from(array: [T; N]) -> Self { crate::InitArrayVec::<T, N>::new(array) }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg(not(feature = "nightly"))]
+impl<T> From<Vec<T>> for crate::HeapVec<T> {
+    fn from(vec: Vec<T>) -> Self {
+        let mut vec = core::mem::ManuallyDrop::new(vec);
+
+        let len = vec.len();
+        let cap = vec.capacity();
+        let ptr = unsafe { NonNull::new_unchecked(vec.as_mut_ptr()) };
+
+        unsafe { crate::HeapVec::from_raw_parts(len, crate::raw::Heap::from_raw_parts(ptr, cap)) }
+    }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
+impl<T> From<Vec<T>> for crate::HeapVec<T> {
+    fn from(vec: Vec<T>) -> Self {
+        let (ptr, len, cap, alloc) = vec.into_raw_parts_with_alloc();
+
+        unsafe {
+            crate::HeapVec::from_raw_parts(
+                len,
+                crate::raw::Heap::from_raw_parts_in(NonNull::new_unchecked(ptr), cap, alloc),
+            )
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg(not(feature = "nightly"))]
+impl<T> From<crate::HeapVec<T>> for Vec<T> {
+    fn from(vec: crate::HeapVec<T>) -> Self {
+        let (length, alloc) = vec.into_raw_parts();
+        let (ptr, capacity) = alloc.into_raw_parts();
+
+        unsafe { Vec::from_raw_parts(ptr.as_ptr(), length, capacity) }
+    }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg(feature = "nightly")]
+impl<T, A: std::alloc::AllocRef> From<crate::HeapVec<T, A>> for Vec<T, A> {
+    fn from(vec: crate::HeapVec<T, A>) -> Self {
+        let (length, alloc) = vec.into_raw_parts();
+        let (ptr, capacity, alloc) = alloc.into_raw_parts_with_alloc();
+
+        unsafe { Vec::from_raw_parts_in(ptr.as_ptr(), length, capacity, alloc) }
+    }
 }
 
 impl<T, S: Storage<T> + ?Sized, I> Index<I> for GenericVec<T, S>

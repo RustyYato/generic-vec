@@ -1,10 +1,17 @@
 [package]
-name = "generic-vec"
-version = "0.1.0"
-authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
-edition = "2018"
+name = 'generic-vec'
+version = '0.1.0-alpha'
+authors = ['RustyYato <krishna.sd.2012@gmail.com>']
+edition = '2018'
+license = 'MIT/Apache 2.0'
+description = 'a vector implementation that can be used in `no_std` envioronments'
+repository = 'https://github.com/RustyYato/generic-vec'
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = 'actively-developed' }
+github = { repository = 'rustyyato/generic-vec' }
 
 [features]
 
