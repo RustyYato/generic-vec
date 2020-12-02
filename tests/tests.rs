@@ -120,7 +120,7 @@ mod init_array_vec {
 mod heap_vec {
     macro_rules! new_vec {
         ($vec:pat, max($len:expr)) => {
-            let $vec = generic_vec::Vec::new();
+            let $vec = generic_vec::HeapVec::new();
         };
     }
 
