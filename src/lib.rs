@@ -609,6 +609,67 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         }
     }
 
+    /// Resizes the [`GenericVec`] in-place so that `len` is equal to `new_len`.
+    ///
+    /// If `new_len` is greater than `len`, the [`GenericVec`] is extended by the difference,
+    /// with each additional slot filled with value. If `new_len` is less than `len`,
+    /// the [`GenericVec`] is simply truncated.
+    ///
+    /// If you know that `new_len` is larger than `len`, then use [`GenericVec::grow`]
+    ///
+    /// If you know that `new_len` is less than `len`, then use [`GenericVec::truncate`]
+    ///
+    /// This method requires `T` to implement `Clone`, in order to be able to clone
+    /// the passed value. If you need more flexibility (or want to rely on Default
+    /// instead of `Clone`), use [`GenericVec::resize_with`].
+    ///
+    /// # Panic behavor
+    ///
+    /// If `F` panics, then all added items will be dropped. This is different
+    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// is unstable, and may change in the future.
+    pub fn resize(&mut self, new_len: usize, value: T)
+    where
+        T: Clone,
+    {
+        match new_len.checked_sub(self.len()) {
+            Some(0) => (),
+            Some(additional) => self.grow(additional, value),
+            None => self.truncate(new_len),
+        }
+    }
+
+    /// Resizes the [`GenericVec`] in-place so that len is equal to new_len.
+    ///
+    /// If `new_len` is greater than `len`, the [`GenericVec`] is extended by the
+    /// difference, with each additional slot filled with the result of calling
+    /// the closure `f`. The return values from `f` will end up in the [`GenericVec`]
+    /// in the order they have been generated.
+    ///
+    /// If `new_len` is less than `len`, the [`GenericVec`] is simply truncated.
+    ///
+    /// If you know that `new_len` is larger than `len`, then use [`GenericVec::grow_with`]
+    ///
+    /// If you know that `new_len` is less than `len`, then use [`GenericVec::truncate`]
+    ///
+    /// This method uses a closure to create new values on every push. If you'd
+    /// rather [`Clone`] a given value, use [`GenericVec::resize`]. If you want to
+    /// use the [`Default`] trait to generate values, you can pass [`Default::default`]
+    /// as the second argument.
+    ///
+    /// # Panic behavor
+    ///
+    /// If `F` panics, then all added items will be dropped. This is different
+    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// is unstable, and may change in the future.
+    pub fn resize_with<F: FnMut() -> T>(&mut self, new_len: usize, value: F) {
+        match new_len.checked_sub(self.len()) {
+            Some(0) => (),
+            Some(additional) => self.grow_with(additional, value),
+            None => self.truncate(new_len),
+        }
+    }
+
     /// Clears the vector, removing all values.
     ///
     /// Note that this method has no effect on the allocated capacity of the vector.
