@@ -84,7 +84,7 @@
 //! freely moved around, unconstrained. You can also create
 //! a new [`ArrayVec`] without passing in an existing buffer.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use generic_vec::ArrayVec;
 //!
 //! let mut array_vec = ArrayVec::<i32, 16>::new();

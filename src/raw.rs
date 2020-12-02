@@ -14,7 +14,7 @@ pub struct AllocError;
 
 #[cfg(any(doc, feature = "nightly"))]
 mod array;
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 mod heap;
 mod slice;
 mod zero_sized;
