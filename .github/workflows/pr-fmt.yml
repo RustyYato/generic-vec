@@ -1,0 +1,18 @@
+name: PR format
+on: [pull_request]
+jobs:
+  fmt:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust: [nightly]
+        components: ['rustfmt']
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Run tests
+      run: rustup component add rustfmt; cargo fmt -- --check
