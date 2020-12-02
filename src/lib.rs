@@ -120,6 +120,9 @@
 //! assert_eq!(vec.len(), 3);
 //! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
 //! ```
+//! Note on the documentation: if the feature exists on [`Vec`], then the documentation
+//! is either exactly the same as [`Vec`] or slightly adapted to better fit [`GenericVec`]
+//!
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -133,6 +136,7 @@ use core::{
 
 mod extension;
 mod impls;
+mod slice;
 // mod set_len;
 
 pub mod iter;
@@ -1481,5 +1485,67 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
 
         // Append the remaining elements
         self.extend_from_slice(tail);
+    }
+
+    /// Removes all but the first of consecutive elements in the vector satisfying
+    /// a given equality relation.
+    ///
+    /// The same_bucket function is passed references to two elements from the
+    /// vector and must determine if the elements compare equal. The elements
+    /// are passed in opposite order from their order in the slice, so if
+    /// same_bucket(a, b) returns true, a is removed.
+    ///
+    /// If the vector is sorted, this removes all duplicates.
+    pub fn dedup_by<F>(&mut self, same_bucket: F)
+    where
+        F: FnMut(&mut T, &mut T) -> bool,
+    {
+        let (a, _) = slice::partition_dedup_by(self.as_mut_slice(), same_bucket);
+        let new_len = a.len();
+        self.truncate(new_len);
+    }
+
+    /// Removes all but the first of consecutive elements in the vector that resolve to the same key.
+    ///
+    /// If the vector is sorted, this removes all duplicates.
+    pub fn dedup_by_key<F, K>(&mut self, key: F)
+    where
+        F: FnMut(&mut T) -> K,
+        K: PartialEq,
+    {
+        #[inline]
+        fn key_to_same_bucket<T, F, K>(mut f: F) -> impl FnMut(&mut T, &mut T) -> bool
+        where
+            F: FnMut(&mut T) -> K,
+            K: PartialEq,
+        {
+            #[inline]
+            move |a, b| {
+                let a = f(a);
+                let b = f(b);
+                a == b
+            }
+        }
+
+        self.dedup_by(key_to_same_bucket(key))
+    }
+
+    /// Removes all but the first of consecutive elements in the vector that resolve to the same key.
+    ///
+    /// If the vector is sorted, this removes all duplicates.
+    pub fn dedup<F, K>(&mut self)
+    where
+        T: PartialEq,
+    {
+        #[inline]
+        fn eq_to_same_buckets<T, F>(mut f: F) -> impl FnMut(&mut T, &mut T) -> bool
+        where
+            F: FnMut(&T, &T) -> bool,
+        {
+            #[inline]
+            move |a, b| f(a, b)
+        }
+
+        self.dedup_by(eq_to_same_buckets(PartialEq::eq))
     }
 }
