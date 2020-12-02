@@ -428,18 +428,21 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Equivalent to &mut s[..].
     pub fn as_mut_slice(&mut self) -> &mut [T] { self }
 
-    /// Returns the underlying raw buffer
+    /// Returns the underlying storage
     pub fn storage(&self) -> &S { &self.storage }
 
-    /// Returns the underlying raw buffer
+    /// Returns the underlying storage
     ///
     /// # Safety
     ///
-    /// You must not replace the raw buffer
+    /// You must not replace the storage
     pub unsafe fn storage_mut(&mut self) -> &mut S { &mut self.storage }
 
-    /// Returns the remaining spare capacity of the vector as a slice
-    /// of `[MaybeUninit<T>]` or `[T]`
+    /// Returns the remaining spare capacity of the vector as
+    /// a `SliceVec<'_, T>`.
+    ///
+    /// Keep in mind that the `SliceVec<'_, T>` will drop all elements
+    /// that you push into it!
     pub fn spare_capacity_mut(&mut self) -> SliceVec<'_, T> {
         // Safety
         //
@@ -1267,7 +1270,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         }
     }
 
-    /// Convert the backing buffer type, and moves all the elements in `self` to the new vector
+    /// Convert the backing storage type, and moves all the elements in `self` to the new vector
     pub fn convert<B: raw::StorageWithCapacity<T>>(mut self) -> GenericVec<T, B>
     where
         S: Sized,
