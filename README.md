@@ -89,4 +89,4 @@ requries either the `alloc` or `std` feature to be enabled.
 
 Current version: 0.1.0-alpha
 
-License: MIT/Apache 2.0
+License: MIT/Apache License 2.0
