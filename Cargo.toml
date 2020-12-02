@@ -11,7 +11,7 @@ repository = 'https://github.com/RustyYato/generic-vec'
 
 [badges]
 maintenance = { status = 'actively-developed' }
-github = { repository = 'rustyyato/generic-vec' }
+github = { repository = 'rustyyato/generic-vec', workflow = 'PR test' }
 
 [features]
 

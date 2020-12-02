@@ -1,5 +1,5 @@
 [![Crates.io](https://img.shields.io/crates/v/generic-vec.svg)](https://crates.io/crates/generic-vec)
-[![Workflow Status](https://github.com/rustyyato/generic-vec/workflows/main/badge.svg)](https://github.com/rustyyato/generic-vec/actions?query=workflow%3A%22main%22)
+[![Workflow Status](https://github.com/rustyyato/generic-vec/workflows/PR%20test/badge.svg)](https://github.com/rustyyato/generic-vec/actions?query=workflow%3A%22PR%2Btest%22)
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
 # generic-vec
