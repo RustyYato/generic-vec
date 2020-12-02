@@ -114,8 +114,8 @@ impl<T> From<Vec<T>> for crate::HeapVec<T> {
 
 #[cfg(feature = "alloc")]
 #[cfg(feature = "nightly")]
-impl<T> From<Vec<T>> for crate::HeapVec<T> {
-    fn from(vec: Vec<T>) -> Self {
+impl<T, A: std::alloc::AllocRef> From<Vec<T, A>> for crate::HeapVec<T, A> {
+    fn from(vec: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = vec.into_raw_parts_with_alloc();
 
         unsafe {
