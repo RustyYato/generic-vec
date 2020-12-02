@@ -65,8 +65,6 @@ impl<T> Default for Heap<T> {
 }
 
 unsafe impl<T, U> Storage<U> for Heap<T> {
-    fn is_valid_storage() -> bool { crate::raw::is_identical::<T, U>() }
-
     fn capacity(&self) -> usize { self.capacity }
 
     fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }

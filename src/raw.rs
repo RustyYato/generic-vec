@@ -119,9 +119,6 @@ pub unsafe trait Storage<T> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = None;
 
-    /// Returns true if the this storage can hold types `T`
-    fn is_valid_storage() -> bool;
-
     /// The number of elements that it is valid to write to this `Storage`
     ///
     /// i.e. `as_mut_ptr()..as_mut_ptr() + capacity()` should be valid to write
@@ -176,7 +173,6 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn is_valid_storage() -> bool { S::is_valid_storage() }
     fn capacity(&self) -> usize { S::capacity(self) }
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
@@ -191,7 +187,6 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
-    fn is_valid_storage() -> bool { S::is_valid_storage() }
     fn capacity(&self) -> usize { S::capacity(self) }
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }

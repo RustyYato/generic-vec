@@ -13,6 +13,7 @@
         alloc_layout_extra,
         const_panic,
         const_fn,
+        const_mut_refs,
     )
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
@@ -26,7 +27,7 @@
 //! interface like [`GenericVec::retain`]. In fact, you can trivially convert a [`Vec`] to a
 //! [`HeapVec`] and back!
 //!
-//! This crate is `no_std` compatible.
+//! This crate is `no_std` compatible, just turn off all default features.
 //!
 //! # Features
 //!
@@ -44,7 +45,7 @@
 //! * You can pass an uninitialized buffer to [`SliceVec`]
 //! * You can only use [`Copy`] types with [`InitSliceVec`]
 //! * You can freely set the length of the [`InitSliceVec`] as long as you stay
-//!     within it's capacity
+//!     within it's capacity (the length of the slice you pass in)
 //!
 //! ```rust
 //! use generic_vec::{SliceVec, InitSliceVec, uninit_array};
@@ -96,7 +97,7 @@
 //! assert_eq!(array_vec, [10, 20, 30]);
 //! ```
 //!
-//! The ditinction between [`ArrayVec`] and [`InitArrayVec`]
+//! The distinction between [`ArrayVec`] and [`InitArrayVec`]
 //! is identical to their slice counterparts.
 //!
 //! Finally a [`HeapVec`] is just [`Vec`], but built atop [`GenericVec`],
@@ -214,15 +215,22 @@ impl<T, S: ?Sized + Storage<T>> Drop for GenericVec<T, S> {
     }
 }
 
+#[cfg(not(feature = "nightly"))]
 impl<T, S: Storage<T>> GenericVec<T, S> {
-    /// Create a new empty GenericVec with the given backend
+    /// Create a new empty `GenericVec` with the given backend
     pub fn with_storage(storage: S) -> Self {
-        assert!(
-            S::is_valid_storage(),
-            "Invalid storage! {} is not compatible with {}",
-            core::any::type_name::<T>(),
-            core::any::type_name::<S>()
-        );
+        Self {
+            storage,
+            len: 0,
+            mark: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T, S: Storage<T>> GenericVec<T, S> {
+    /// Create a new empty `GenericVec` with the given backend
+    pub const fn with_storage(storage: S) -> Self {
         Self {
             storage,
             len: 0,
@@ -232,7 +240,7 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
 }
 
 impl<T, S: raw::StorageWithCapacity<T>> GenericVec<T, S> {
-    /// Create a new empty GenericVec with the backend with at least the given capacity
+    /// Create a new empty `GenericVec` with the backend with at least the given capacity
     pub fn with_capacity(capacity: usize) -> Self { Self::with_storage(S::with_capacity(capacity)) }
 
     #[inline]
@@ -305,9 +313,16 @@ impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
     pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
 }
 
+#[cfg(not(feature = "nightly"))]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
     pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::Uninit(slice)) }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, T> SliceVec<'a, T> {
+    /// Create a new empty `SliceVec`
+    pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::Uninit(slice)) }
 }
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
@@ -338,12 +353,6 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
     ///
     /// If the given storage cannot hold type `T`, then this method will panic
     pub unsafe fn from_raw_parts(len: usize, storage: S) -> Self {
-        assert!(
-            S::is_valid_storage(),
-            "Invalid storage! {} is not compatible with {}",
-            core::any::type_name::<T>(),
-            core::any::type_name::<S>()
-        );
         Self {
             storage,
             len,

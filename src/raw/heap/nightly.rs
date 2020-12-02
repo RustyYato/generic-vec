@@ -114,8 +114,6 @@ impl<T, A: AllocRef + Default> Default for Heap<T, A> {
 }
 
 unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
-    fn is_valid_storage() -> bool { crate::raw::is_identical::<T, U>() }
-
     fn capacity(&self) -> usize { crate::raw::capacity(self.capacity, size_of::<T>(), size_of::<U>()) }
 
     fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }
