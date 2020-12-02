@@ -17,8 +17,6 @@ pub struct IntoIter<T, S: ?Sized + Storage<T>> {
 impl<T, S: ?Sized + Storage<T>> Drop for IntoIter<T, S> {
     fn drop(&mut self) {
         unsafe {
-            // TODO: handle panics
-
             struct DropAlloc<'a, S: ?Sized>(&'a mut S);
 
             impl<S: ?Sized> Drop for DropAlloc<'_, S> {
@@ -73,6 +71,24 @@ impl<T, S: ?Sized + Storage<T>> ExactSizeIterator for IntoIter<T, S> {
 
 #[cfg(feature = "nightly")]
 unsafe impl<T, S: ?Sized + Storage<T>> TrustedLen for IntoIter<T, S> {}
+
+impl<T, S: ?Sized + Storage<T>> IntoIter<T, S> {
+    /// Get a slice to the remaining elements in the iterator
+    pub fn as_slice(&self) -> &[T] {
+        let index = self.index;
+        let len = self.vec.len();
+        let ptr = self.vec.as_ptr();
+        unsafe { core::slice::from_raw_parts(ptr.add(index), len.wrapping_sub(index)) }
+    }
+
+    /// Get a mutable slice to the remaining elements in the iterator
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        let index = self.index;
+        let len = self.vec.len();
+        let ptr = self.vec.as_mut_ptr();
+        unsafe { core::slice::from_raw_parts_mut(ptr.add(index), len.wrapping_sub(index)) }
+    }
+}
 
 impl<T, S: ?Sized + Storage<T>> Iterator for IntoIter<T, S> {
     type Item = T;
