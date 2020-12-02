@@ -10,8 +10,7 @@ fn clone_extend_from_slice<T, S: ?Sized + Storage<T>>(vec: &mut GenericVec<T, S>
 where
     T: Clone,
 {
-    let mut len = crate::set_len::SetLenOnDrop::new(&mut vec.len);
-    let mut ptr = vec.storage.as_mut_ptr();
+    let mut spare = vec.spare_capacity_mut();
 
     for value in slice.iter().cloned() {
         // Safety
@@ -20,10 +19,14 @@ where
         // which has the pre-condition that there must be at least enough remaining capacity
         // for the slice. So it is safe to write the contents of the slice
         unsafe {
-            ptr.write(value);
-            len += 1;
-            ptr = ptr.add(1);
+            spare.push_unchecked(value);
         }
+    }
+
+    unsafe {
+        let spare = core::mem::ManuallyDrop::new(spare);
+        let len = spare.len() + vec.len();
+        vec.set_len_unchecked(len);
     }
 }
 
@@ -31,26 +34,27 @@ fn clone_grow<T, S: ?Sized + Storage<T>>(vec: &mut GenericVec<T, S>, additional:
 where
     T: Clone,
 {
-    let mut len = crate::set_len::SetLenOnDrop::new(&mut vec.len);
-    let mut ptr = vec.storage.as_mut_ptr();
+    let mut spare = vec.spare_capacity_mut();
 
-    // Safety
-    //
-    // `clone_grow` is only called from `Extension::grow`
-    // which has the pre-condition that there must be at least enough remaining capacity
-    // for the `additional` new elements
-    for _ in 1..additional {
+    if additional != 0 {
+        // Safety
+        //
+        // `clone_extend_from_slice` is only called from `Extension::extend_from_slice`
+        // which has the pre-condition that there must be at least enough remaining capacity
+        // for the slice. So it is safe to write the contents of the slice
         unsafe {
-            ptr.write(value.clone());
-            len += 1;
-            ptr = ptr.add(1);
+            for _ in 0..additional {
+                spare.push_unchecked(value.clone());
+            }
+
+            spare.push_unchecked(value);
         }
     }
 
-    if additional > 0 {
-        unsafe {
-            ptr.write(value);
-        }
+    unsafe {
+        let spare = core::mem::ManuallyDrop::new(spare);
+        let len = spare.len() + vec.len();
+        vec.set_len_unchecked(len);
     }
 }
 

@@ -23,6 +23,7 @@ impl<V, T, S: StorageWithCapacity<T>> FromIterator<V> for GenericVec<T, S>
 where
     Self: Extend<V>,
 {
+    #[inline]
     fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
         let mut array = Self::default();
         array.extend(iter);
@@ -32,7 +33,9 @@ where
 
 impl<T, S: ?Sized + Storage<T>> Extend<T> for GenericVec<T, S> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        let iter = iter.into_iter();
+        let _ = self.try_reserve(iter.size_hint().0);
         #[allow(clippy::drop_ref)]
-        iter.into_iter().for_each(|item| drop(self.push(item)));
+        iter.for_each(|item| drop(self.push(item)));
     }
 }

@@ -133,7 +133,7 @@ use core::{
 
 mod extension;
 mod impls;
-mod set_len;
+// mod set_len;
 
 pub mod iter;
 pub mod raw;
@@ -549,6 +549,12 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// This method requires `T` to implement `Clone`, in order to be able to clone
     /// the passed value. If you need more flexibility (or want to rely on Default instead of `Clone`),
     /// use [`GenericVec::grow_with`].
+    ///
+    /// # Panic behavor
+    ///
+    /// If `T::clone` panics, then all added items will be dropped. This is different
+    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// is unstable, and may change in the future.
     pub fn grow(&mut self, additional: usize, value: T)
     where
         T: Clone,
@@ -566,6 +572,12 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// If you'd rather `Clone` a given value, use `GenericVec::resize`.
     /// If you want to use the `Default` trait to generate values, you
     /// can pass `Default::default` as the second argument.
+    ///
+    /// # Panic behavor
+    ///
+    /// If `F` panics, then all added items will be dropped. This is different
+    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// is unstable, and may change in the future.
     pub fn grow_with<F>(&mut self, additional: usize, mut value: F)
     where
         F: FnMut() -> T,
@@ -573,8 +585,8 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         // Safety
         //
         // * we reserve enough space for `additional` elements
-        // * we use `SetLenOnDrop` to ensure that the length is will
-        //   correctly set, even on panic
+        // * we use `spare_capacity_mut` to ensure that the items are dropped,
+        //   even on panic
         // * the `ptr` always stays in bounds
 
         self.reserve(additional);
@@ -1416,6 +1428,12 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Note that this function is same as extend except that it is specialized
     /// to work with slices instead. If and when Rust gets specialization this
     /// function will likely be deprecated (but still available).
+    ///
+    /// # Panic behavor
+    ///
+    /// If `T::clone` panics, then all added items will be dropped. This is different
+    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// is unstable, and may change in the future.
     pub fn extend_from_slice(&mut self, slice: &[T])
     where
         T: Clone,
@@ -1426,5 +1444,42 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         //
         // We reserved enough space
         unsafe { extension::Extension::extend_from_slice(self, slice) }
+    }
+
+    /// Replaces all of the current elements with the ones in the slice
+    ///
+    /// equivalent to the following
+    ///
+    /// ```rust
+    /// # let slice = [];
+    /// # let mut buffer = generic_vec::uninit_array!(0);
+    /// # let mut vec = generic_vec::SliceVec::<()>::new(&mut buffer);
+    /// vec.clear();
+    /// vec.extend_from_slice(&slice);
+    /// ```
+    ///
+    /// # Panic
+    ///
+    /// May try to panic/reallocate if there is not enough capacity for the slice
+    pub fn clone_from(&mut self, source: &[T])
+    where
+        T: Clone,
+    {
+        let source = source.as_ref();
+        // If the `self` is longer than `source`, remove excess
+        self.truncate(source.len());
+
+        // `self` is now at most the same length as `source`
+        //
+        // * `init.len() == self.len()`
+        // * tail is the rest of the `source`, in the case
+        //     that `self` is smaller than `source`
+        let (init, tail) = source.split_at(self.len());
+
+        // Clone in the beginning, using `slice::clone_from_slice`
+        self.clone_from_slice(init);
+
+        // Append the remaining elements
+        self.extend_from_slice(tail);
     }
 }

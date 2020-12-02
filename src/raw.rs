@@ -173,10 +173,15 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
+    #[inline]
     fn capacity(&self) -> usize { S::capacity(self) }
+    #[inline]
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
+    #[inline]
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
+    #[inline]
     fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
+    #[inline]
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
 }
 
@@ -187,10 +192,15 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
 
+    #[inline]
     fn capacity(&self) -> usize { S::capacity(self) }
+    #[inline]
     fn as_ptr(&self) -> *const T { S::as_ptr(self) }
+    #[inline]
     fn as_mut_ptr(&mut self) -> *mut T { S::as_mut_ptr(self) }
+    #[inline]
     fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
+    #[inline]
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
 }
 

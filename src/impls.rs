@@ -22,12 +22,7 @@ where
         vec
     }
 
-    fn clone_from(&mut self, source: &Self) {
-        self.truncate(source.len());
-        let (init, tail) = source.split_at(self.len());
-        self.clone_from_slice(init);
-        self.extend_from_slice(tail);
-    }
+    fn clone_from(&mut self, source: &Self) { self.clone_from(source); }
 }
 
 impl<T, S: StorageWithCapacity<T>> Default for GenericVec<T, S> {
