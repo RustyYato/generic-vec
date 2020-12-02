@@ -1,0 +1,21 @@
+name: PR test
+on: [pull_request]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # windows and macos are disabled, because we don't do anything target specific
+        # os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest]
+        rust: [nightly]
+        features_std: ["", "alloc", "std"] 
+        features_nightly: ["", "nightly"] 
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Run tests
+      run: cargo +nightly test --verbose --no-default-features --features "${{ matrix.features_std }}" --features "${{ matrix.features_nightly }}"
