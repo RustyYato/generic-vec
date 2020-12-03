@@ -10,6 +10,12 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
     #[inline]
     pub(crate) fn new(raw: RawCursor<'a, T, S>) -> Self { Self { raw } }
 
+    /// Get a mutable reference to the underlying `RawCursor`
+    ///
+    /// Updating the state of the underlying `RawCursor` does
+    /// update the state of this `Cursor`
+    pub fn as_raw_cursor_mut(&mut self) -> &mut RawCursor<'a, T, S> { &mut self.raw }
+
     /// The number of remaining elements in range of this `Cursor`
     ///
     /// The `Cursor` is empty when there are 0 remaining elements
