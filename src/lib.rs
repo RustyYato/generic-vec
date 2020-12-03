@@ -177,6 +177,100 @@ pub mod macros {
     }
 }
 
+/// Create a new generic vector
+///
+/// Because this can create any generic vector, you will likely
+/// need to add some type annotations when you use it,
+///
+/// ```rust
+/// # use generic_vec::{gvec, ArrayVec};
+/// let x: ArrayVec<i32, 2> = gvec![0, 1];
+/// assert_eq!(x, [0, 1]);
+/// ```
+#[macro_export]
+#[cfg(feature = "nightly")]
+macro_rules! gvec {
+    ($expr:expr; $n:expr) => {{
+        let len = $n;
+        let mut vec = $crate::GenericVec::with_capacity(len);
+        vec.grow(len, $expr);
+        vec
+    }};
+    ($($expr:expr),*) => {{
+        let expr = [$($expr),*];
+        let mut vec = $crate::GenericVec::with_capacity(expr.len());
+        unsafe { vec.push_array_unchecked(expr); }
+        vec
+    }};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! count {
+    () => { 0 };
+    ($($a:tt $b:tt)*) => { $crate::count!($($a)*) << 1 };
+    ($c:tt $($a:tt $b:tt)*) => { ($crate::count!($($a)*) << 1) | 1 };
+}
+
+/// Create a new generic vector
+///
+/// Because this can create any generic vector, you will likely
+/// need to add some type annotations when you use it,
+///
+/// ```rust
+/// # use generic_vec::{gvec, ZSVec};
+/// struct Foo;
+/// let x: ZSVec<Foo> = gvec![Foo, Foo];
+/// assert_eq!(x.len(), 2);
+/// ```
+#[macro_export]
+#[cfg(not(feature = "nightly"))]
+#[cfg(not(feature = "alloc"))]
+macro_rules! gvec {
+    ($expr:expr; $n:expr) => {{
+        let len = $n;
+        let mut vec = $crate::GenericVec::with_capacity(len);
+        vec.grow(len, $expr);
+        vec
+    }};
+    ($($expr:expr),*) => {{
+        let mut vec = $crate::GenericVec::with_capacity($crate::count!($(($expr))*));
+        unsafe {
+            $(vec.push_unchecked($expr);)*
+        }
+        vec
+    }};
+}
+
+/// Create a new generic vector
+///
+/// Because this can create any generic vector, you will likely
+/// need to add some type annotations when you use it,
+///
+/// ```rust
+/// # use generic_vec::{gvec, HeapVec};
+/// let x: HeapVec<_> = gvec![0, 1, 2, 3];
+/// assert_eq!(x, [0, 1, 2, 3]);
+/// ```
+#[macro_export]
+#[cfg(not(feature = "nightly"))]
+#[cfg(feature = "alloc")]
+macro_rules! gvec {
+    ($expr:expr; $n:expr) => {{
+        let len = $n;
+        let mut vec = $crate::GenericVec::with_capacity(len);
+        vec.grow(len, $expr);
+        vec
+    }};
+    ($($expr:expr),*) => {{
+        let mut vec = $crate::GenericVec::with_capacity($crate::count!($(($expr))*));
+        unsafe {
+            $(vec.push_unchecked($expr);)*
+        }
+        vec
+    }};
+}
+
 /// a helper macro to safely create an array of uninitialized memory of any size
 ///
 ///  use the const prefix if you need to initialize a `const` or `static`,
@@ -554,6 +648,10 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// the passed value. If you need more flexibility (or want to rely on Default instead of `Clone`),
     /// use [`GenericVec::grow_with`].
     ///
+    /// # Panic
+    ///
+    /// May panic or reallocate if the collection is full
+    ///
     /// # Panic behavor
     ///
     /// If `T::clone` panics, then all added items will be dropped. This is different
@@ -576,6 +674,10 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// If you'd rather `Clone` a given value, use `GenericVec::resize`.
     /// If you want to use the `Default` trait to generate values, you
     /// can pass `Default::default` as the second argument.
+    ///
+    /// # Panic
+    ///
+    /// May panic or reallocate if the collection is full
     ///
     /// # Panic behavor
     ///
@@ -623,6 +725,10 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// the passed value. If you need more flexibility (or want to rely on Default
     /// instead of `Clone`), use [`GenericVec::resize_with`].
     ///
+    /// # Panic
+    ///
+    /// May panic or reallocate if the collection is full
+    ///
     /// # Panic behavor
     ///
     /// If `F` panics, then all added items will be dropped. This is different
@@ -656,6 +762,10 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// rather [`Clone`] a given value, use [`GenericVec::resize`]. If you want to
     /// use the [`Default`] trait to generate values, you can pass [`Default::default`]
     /// as the second argument.
+    ///
+    /// # Panic
+    ///
+    /// May panic or reallocate if the collection is full
     ///
     /// # Panic behavor
     ///
@@ -1377,6 +1487,13 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         }
     }
 
+    /// Moves all the elements of `other` into `Self`, leaving `other` empty.
+    ///
+    /// # Panic
+    ///
+    /// May panic or reallocate if the collection is full
+    pub fn append<B: Storage<T> + ?Sized>(&mut self, other: &mut GenericVec<T, B>) { other.split_off_into(0, self) }
+
     /// Convert the backing storage type, and moves all the elements in `self` to the new vector
     pub fn convert<B: raw::StorageWithCapacity<T>>(mut self) -> GenericVec<T, B>
     where
@@ -1484,7 +1601,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
 
     /// Retains only the elements specified by the predicate.
     ///
-    /// In other words, remove all elements e such that f(&e) returns false.
+    /// In other words, remove all elements `e` such that `f(e)` returns false.
     /// This method operates in place, visiting each element exactly once in
     /// the original order, and preserves the order of the retained elements.
     #[inline]
@@ -1500,8 +1617,8 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// # Safety
     ///
-    /// You must not drop any of the elements in `slice`, and
-    /// there must be at least `slice.len()` remaining capacity in the vector
+    /// * You must not drop any of the elements in `slice`
+    /// * There must be at least `slice.len()` remaining capacity in the vector
     pub unsafe fn extend_from_slice_unchecked(&mut self, slice: &[T]) {
         debug_assert!(
             self.remaining_capacity() >= slice.len(),
@@ -1528,8 +1645,8 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// # Panic behavor
     ///
-    /// If `T::clone` panics, then all added items will be dropped. This is different
-    /// from `std`, where on panic, items will stay in the `Vec`. This behavior
+    /// If `T::clone` panics, then all newly added items will be dropped. This is different
+    /// from `std`, where on panic, newly added items will stay in the `Vec`. This behavior
     /// is unstable, and may change in the future.
     pub fn extend_from_slice(&mut self, slice: &[T])
     where
