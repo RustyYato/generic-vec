@@ -41,3 +41,12 @@ impl<T, S: ?Sized + Storage<T>> Extend<T> for GenericVec<T, S> {
         iter.for_each(|item| drop(self.push(item)));
     }
 }
+
+impl<'a, T: 'a + Clone, S: ?Sized + Storage<T>> Extend<&'a T> for GenericVec<T, S> {
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
+        let iter = iter.into_iter();
+        let _ = self.try_reserve(iter.size_hint().0);
+        #[allow(clippy::drop_ref)]
+        iter.cloned().for_each(|item| drop(self.push(item)));
+    }
+}

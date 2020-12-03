@@ -1,14 +1,45 @@
-use crate::raw::{AllocError, Init, Storage, Uninit};
+use crate::raw::{AllocError, Storage};
 
 use core::mem::{align_of, size_of, MaybeUninit};
 
 /// An uninitialized slice storage
-pub type UninitSlice<'a, T> = Uninit<&'a mut [MaybeUninit<T>]>;
-/// An initialized slice storage, can only store `Copy` types
-pub type Slice<'a, T> = Init<&'a mut [T]>;
+#[repr(transparent)]
+pub struct UninitSlice<'a, T>(&'a mut [MaybeUninit<T>]);
 
 unsafe impl<T> Send for UninitSlice<'_, T> {}
 unsafe impl<T> Sync for UninitSlice<'_, T> {}
+
+#[cfg(not(feature = "nightly"))]
+impl<'a, T> UninitSlice<'a, T> {
+    /// Create a new `UninitSlice` storage
+    pub fn new(buffer: &'a mut [MaybeUninit<T>]) -> Self { Self(buffer) }
+
+    /// Reborrow an `UninitSlice` storage
+    pub fn as_ref(&mut self) -> UninitSlice<'_, T> { UninitSlice(self.0) }
+
+    /// Get the backing value of the this `Uninit` storage
+    ///
+    /// # Safety
+    ///
+    /// You may not write uninitialized memory to this slice
+    pub unsafe fn into_inner(self) -> &'a mut [MaybeUninit<T>] { self.0 }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, T> UninitSlice<'a, T> {
+    /// Create a new `UninitSlice` storage
+    pub const fn new(buffer: &'a mut [MaybeUninit<T>]) -> Self { Self(buffer) }
+
+    /// Reborrow an `UninitSlice` storage
+    pub const fn as_ref(&mut self) -> UninitSlice<'_, T> { UninitSlice(self.0) }
+
+    /// Get the backing value of the this `Uninit` storage
+    ///
+    /// # Safety
+    ///
+    /// You may not write uninitialized memory to this slice
+    pub const unsafe fn into_inner(self) -> &'a mut [MaybeUninit<T>] { self.0 }
+}
 
 unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
@@ -35,19 +66,19 @@ unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
     }
 }
 
-unsafe impl<T: Copy> crate::raw::StorageInit<T> for Slice<'_, T> {}
-unsafe impl<T: Copy> Storage<T> for Slice<'_, T> {
+unsafe impl<T: Copy> crate::raw::StorageInit<T> for [T] {}
+unsafe impl<T: Copy> Storage<T> for [T] {
     const IS_ALIGNED: bool = true;
 
-    fn capacity(&self) -> usize { self.0.len() }
+    fn capacity(&self) -> usize { self.len() }
 
-    fn as_ptr(&self) -> *const T { self.0.as_ptr().cast() }
+    fn as_ptr(&self) -> *const T { self.as_ptr().cast() }
 
-    fn as_mut_ptr(&mut self) -> *mut T { self.0.as_mut_ptr().cast() }
+    fn as_mut_ptr(&mut self) -> *mut T { self.as_mut_ptr().cast() }
 
     fn reserve(&mut self, capacity: usize) {
-        if capacity > self.0.len() {
-            crate::raw::fixed_capacity_reserve_error(self.0.len(), capacity)
+        if capacity > self.len() {
+            crate::raw::fixed_capacity_reserve_error(self.len(), capacity)
         }
     }
 

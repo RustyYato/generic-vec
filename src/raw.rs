@@ -17,22 +17,15 @@ mod array;
 #[cfg(any(doc, feature = "alloc"))]
 mod heap;
 mod slice;
+mod uninit;
 mod zero_sized;
 
-#[cfg(any(doc, feature = "nightly"))]
-pub use array::{Array, UninitArray};
 #[cfg(any(doc, feature = "alloc"))]
 pub use heap::Heap;
 
-pub use slice::{Slice, UninitSlice};
+pub use slice::UninitSlice;
+pub use uninit::UninitBuffer;
 pub use zero_sized::ZeroSized;
-
-/// A slice or array storage that contains initialized `Copy` types
-#[repr(transparent)]
-pub struct Init<T: ?Sized>(pub T);
-/// A slice or array storage that contains uninitialized data
-#[repr(transparent)]
-pub struct Uninit<T: ?Sized>(pub(crate) T);
 
 #[cold]
 #[inline(never)]
@@ -81,19 +74,6 @@ const fn capacity(old_capacity: usize, size_self: usize, size_other: usize) -> u
 
         size as usize
     }
-}
-
-impl<T> Uninit<T> {
-    /// Create a new `Uninit` storage
-    pub fn new(value: T) -> Self { Self(value) }
-
-    /// Get the backing value of the this `Uninit` storage
-    ///
-    /// # Safety
-    ///
-    /// This `Uninit` storage must be backed by a potentially
-    /// uninitialized source.
-    pub unsafe fn into_inner(self) -> T { self.0 }
 }
 
 /// A [`Storage`] that can only contain initialized `Storage::Item`

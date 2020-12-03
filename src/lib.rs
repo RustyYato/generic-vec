@@ -38,9 +38,12 @@
 //!
 //! # Basic Usage
 //!
-//! On stable `no_std` you have two choices on for which storage you can use
-//! [`SliceVec`] or [`InitSliceVec`]. There are three major differences between
-//! them.
+//! On stable `no_std` you have four choices on for which storage you can use
+//! [`SliceVec`], [`InitSliceVec`], [`TypeVec`], and [`ZSVec`].
+//!
+//! [`SliceVec`] and [`InitSliceVec`] are pretty similar, you give them a slice
+//! buffer, and they store all of thier values in that buffer. But have three major
+//! differences between them.
 //!
 //! * You can pass an uninitialized buffer to [`SliceVec`]
 //! * You can only use [`Copy`] types with [`InitSliceVec`]
@@ -79,6 +82,40 @@
 //! slice_vec.push(0);
 //! ```
 //!
+//! [`TypeVec`] is an owned buffer. You can use like so:
+//!
+//! ```rust
+//! use generic_vec::TypeVec;
+//! let mut vec = TypeVec::<u32, [u32; 4]>::new();
+//! vec.extend(&[1, 2, 3, 4]);
+//! assert_eq!(vec, [1, 2, 3, 4]);
+//! vec.try_push(5).expect_err("Tried to push past capacity!");
+//! ```
+//!
+//! The second parameter specifies the buffer type, this can be any type
+//! you want. Only the size of the type matters. There is also a defaulted
+//! third parameter, but you should only use that if you know what you are
+//! doing, and after reading the docs for [`UninitBuffer`](raw::UninitBuffer).
+//!
+//! As a neat side-effect of this framework, you can also get an efficient
+//! [`GenericVec`] for zero-sized types, just a `usize` in size! This feature
+//! can be on stable `no_std`.
+//!
+//! ```rust
+//! use generic_vec::ZSVec;
+//!
+//! struct MyType;
+//!
+//! let mut vec = ZSVec::new();
+//! vec.push(MyType);
+//! vec.push(MyType);
+//! vec.push(MyType);
+//! assert_eq!(vec.len(), 3);
+//! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
+//! ```
+//!
+//! ## Nightly
+//!
 //! If you enable the nightly feature then you gain access to
 //! [`ArrayVec`] and [`InitArrayVec`]. These are just like the
 //! slice versions, but since they own their data, they can be
@@ -104,22 +141,6 @@
 //! meaning you get all the features of [`GenericVec`] for free! But this
 //! requries either the `alloc` or `std` feature to be enabled.
 //!
-//! As a neat side-effect of this framework, you can also get an efficient
-//! [`GenericVec`] for zero-sized types, just a `usize` in size! This feature
-//! can be on stable `no_std`.
-//!
-//! ```rust
-//! use generic_vec::ZSVec;
-//!
-//! struct MyType;
-//!
-//! let mut vec = ZSVec::new();
-//! vec.push(MyType);
-//! vec.push(MyType);
-//! vec.push(MyType);
-//! assert_eq!(vec.len(), 3);
-//! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
-//! ```
 //! Note on the documentation: if the feature exists on [`Vec`], then the documentation
 //! is either exactly the same as [`Vec`] or slightly adapted to better fit [`GenericVec`]
 //!
@@ -156,17 +177,21 @@ pub type HeapVec<T> = GenericVec<T, raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
 #[cfg(any(doc, feature = "nightly"))]
-pub type ArrayVec<T, const N: usize> = GenericVec<T, raw::UninitArray<T, N>>;
+pub type ArrayVec<T, const N: usize> = TypeVec<T, [T; N]>;
 /// An slice backed vector backed by potentially uninitialized memory
 pub type SliceVec<'a, T> = GenericVec<T, raw::UninitSlice<'a, T>>;
 
 /// An array backed vector backed by initialized memory
 #[cfg(any(doc, feature = "nightly"))]
-pub type InitArrayVec<T, const N: usize> = GenericVec<T, raw::Array<T, N>>;
+pub type InitArrayVec<T, const N: usize> = GenericVec<T, [T; N]>;
 /// An slice backed vector backed by initialized memory
-pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
+pub type InitSliceVec<'a, T> = GenericVec<T, &'a mut [T]>;
 /// A counter vector that can only store zero-sized types
 pub type ZSVec<T> = GenericVec<T, raw::ZeroSized<T>>;
+/// An type based vector backed by uninitialized memory with the same layout as `B`
+///
+/// see: [`UninitBuffer`](raw::UninitBuffer) for details
+pub type TypeVec<T, B, A = T> = GenericVec<T, raw::UninitBuffer<B, A>>;
 
 #[doc(hidden)]
 pub mod macros {
@@ -332,6 +357,11 @@ impl<T, S: ?Sized + Storage<T>> Drop for GenericVec<T, S> {
 #[cfg(not(feature = "nightly"))]
 impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty `GenericVec` with the given backend
+    ///
+    /// ```rust
+    /// use generic_vec::{GenericVec, raw::ZeroSized};
+    /// let vec = GenericVec::with_storage(ZeroSized::<[i32; 0]>::NEW);
+    /// ```
     pub fn with_storage(storage: S) -> Self {
         assert!(S::IS_ALIGNED, "The storage must be aligned to `T`");
         Self {
@@ -366,23 +396,42 @@ impl<T, S: raw::StorageWithCapacity<T>> GenericVec<T, S> {
     }
 }
 
-#[cfg(feature = "nightly")]
-impl<T, const N: usize> ArrayVec<T, N> {
-    /// Create a new empty `ArrayVec`
-    pub const fn new() -> Self {
+impl<T, B> TypeVec<T, B, T> {
+    /// Create a new [`TypeVec`]
+    pub const fn new() -> Self { Self::with_align() }
+}
+
+impl<T, B, A> TypeVec<T, B, A> {
+    /// Create a new [`TypeVec`] with the given alignment type
+    pub const fn with_align() -> Self {
+        #[cfg(not(feature = "nightly"))]
+        {
+            [()][(!<raw::UninitBuffer<B, A> as raw::Storage<T>>::IS_ALIGNED) as usize];
+        }
+        #[cfg(feature = "nightly")]
+        {
+            assert!(
+                <raw::UninitBuffer<B, A> as raw::Storage<T>>::IS_ALIGNED,
+                "Your buffer is not sufficiently aligned"
+            )
+        }
+
         Self {
             len: 0,
+            storage: raw::UninitBuffer::uninit(),
             mark: PhantomData,
-            storage: raw::UninitArray::uninit(),
         }
     }
+}
 
+#[cfg(feature = "nightly")]
+impl<T, const N: usize> ArrayVec<T, N> {
     /// Create a new full `ArrayVec`
     pub const fn from_array(array: [T; N]) -> Self {
         Self {
             len: 0,
             mark: PhantomData,
-            storage: raw::UninitArray::with_array(array),
+            storage: raw::UninitBuffer::new(array),
         }
     }
 
@@ -394,18 +443,18 @@ impl<T, const N: usize> ArrayVec<T, N> {
     pub fn into_array(self) -> [T; N] {
         assert!(self.is_full());
         let this = core::mem::ManuallyDrop::new(self);
-        unsafe { this.storage.0.as_ptr().read() }
+        unsafe { Storage::<[T; N]>::as_ptr(&this.storage).read() }
     }
 }
 
 #[cfg(feature = "nightly")]
 impl<T: Copy, const N: usize> InitArrayVec<T, N> {
     /// Create a new full `InitArrayVec`
-    pub fn new(array: [T; N]) -> Self {
+    pub fn new(storage: [T; N]) -> Self {
         Self {
             len: N,
             mark: PhantomData,
-            storage: raw::Array::new(array),
+            storage,
         }
     }
 }
@@ -432,20 +481,20 @@ impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
 #[cfg(not(feature = "nightly"))]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
-    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::Uninit(slice)) }
+    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::new(slice)) }
 }
 
 #[cfg(feature = "nightly")]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
-    pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::Uninit(slice)) }
+    pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::new(slice)) }
 }
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     /// Create a new full `InitSliceVec`
-    pub fn new(slice: &'a mut [T]) -> Self {
-        let len = slice.len();
-        let mut vec = Self::with_storage(raw::Init(slice));
+    pub fn new(storage: &'a mut [T]) -> Self {
+        let len = storage.len();
+        let mut vec = Self::with_storage(storage);
         vec.set_len(len);
         vec
     }
@@ -1437,6 +1486,19 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Returns a newly allocated vector containing the elements in the range `[at, len)`.
     /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
+    ///
+    /// ```rust
+    /// # use generic_vec::{gvec, SliceVec, uninit_array};
+    /// # let mut vec_buf = uninit_array!(3);
+    /// # let mut vec2_buf = uninit_array!(5);
+    /// # let mut vec: SliceVec<_> = SliceVec::new(&mut vec_buf); vec.extend([1, 2, 3].iter().copied());
+    /// # let mut vec2: SliceVec<_> = SliceVec::new(&mut vec2_buf); vec2.extend([4, 5, 6].iter().copied());
+    /// assert_eq!(vec, [1, 2, 3]);
+    /// assert_eq!(vec2, [4, 5, 6]);
+    /// vec.split_off_into(1, &mut vec2);
+    /// assert_eq!(vec, [1]);
+    /// assert_eq!(vec2, [4, 5, 6, 2, 3]);
+    /// ```
     pub fn split_off<B>(&mut self, index: usize) -> GenericVec<T, B>
     where
         B: raw::StorageWithCapacity<T>,
@@ -1463,6 +1525,19 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Appends the elements from the range `[at, len)` to `other`.
     /// After the call, the original vector will be left containing the elements `[0, at)`
     /// with its previous capacity unchanged.
+    ///
+    /// ```rust
+    /// # use generic_vec::{gvec, SliceVec, uninit_array};
+    /// # let mut vec_buf = uninit_array!(3);
+    /// # let mut vec2_buf = uninit_array!(5);
+    /// # let mut vec: SliceVec<_> = SliceVec::new(&mut vec_buf); vec.extend([1, 2, 3].iter().copied());
+    /// # let mut vec2: SliceVec<_> = SliceVec::new(&mut vec2_buf); vec2.extend([4, 5, 6].iter().copied());
+    /// assert_eq!(vec, [1, 2, 3]);
+    /// assert_eq!(vec2, [4, 5, 6]);
+    /// vec.split_off_into(1, &mut vec2);
+    /// assert_eq!(vec, [1]);
+    /// assert_eq!(vec2, [4, 5, 6, 2, 3]);
+    /// ```
     pub fn split_off_into<B>(&mut self, index: usize, other: &mut GenericVec<T, B>)
     where
         B: raw::Storage<T> + ?Sized,
@@ -1488,6 +1563,21 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     }
 
     /// Moves all the elements of `other` into `Self`, leaving `other` empty.
+    ///
+    /// Does not change the capacity of either collection.
+    ///
+    /// ```rust
+    /// # use generic_vec::{gvec, SliceVec, uninit_array};
+    /// # let mut vec_buf = uninit_array!(6);
+    /// # let mut vec2_buf = uninit_array!(3);
+    /// # let mut vec: SliceVec<_> = SliceVec::new(&mut vec_buf); vec.extend([1, 2, 3].iter().copied());
+    /// # let mut vec2: SliceVec<_> = SliceVec::new(&mut vec2_buf); vec2.extend([4, 5, 6].iter().copied());
+    /// assert_eq!(vec, [1, 2, 3]);
+    /// assert_eq!(vec2, [4, 5, 6]);
+    /// vec.append(&mut vec2);
+    /// assert_eq!(vec, [1, 2, 3, 4, 5, 6]);
+    /// assert_eq!(vec2, []);
+    /// ```
     ///
     /// # Panic
     ///
