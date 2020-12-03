@@ -119,6 +119,13 @@ pub unsafe trait Storage<T> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = None;
 
+    /// Is the pointer from `as_ptr` guaranteed to be aligned to `T`
+    ///
+    /// Ideally this would be a `where` clause to prevent alignment issues
+    /// at compile time, but that can't happen until const-generics allows
+    /// predicates in where bounds (like `where align_of::<T>() >= align_of::<U>()`)
+    const IS_ALIGNED: bool;
+
     /// The number of elements that it is valid to write to this `Storage`
     ///
     /// i.e. `as_mut_ptr()..as_mut_ptr() + capacity()` should be valid to write
@@ -172,7 +179,7 @@ unsafe impl<T, S: ?Sized + StorageInit<T>> StorageInit<T> for &mut S {}
 unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
-
+    const IS_ALIGNED: bool = S::IS_ALIGNED;
     #[inline]
     fn capacity(&self) -> usize { S::capacity(self) }
     #[inline]
@@ -191,6 +198,7 @@ unsafe impl<T, S: ?Sized + StorageInit<T>> StorageInit<T> for Box<S> {}
 unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
+    const IS_ALIGNED: bool = S::IS_ALIGNED;
 
     #[inline]
     fn capacity(&self) -> usize { S::capacity(self) }

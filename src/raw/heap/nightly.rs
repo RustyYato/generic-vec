@@ -2,7 +2,7 @@ use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
 use core::{
     alloc::Layout,
-    mem::{size_of, ManuallyDrop},
+    mem::{align_of, size_of, ManuallyDrop},
     ptr::NonNull,
 };
 use std::alloc::handle_alloc_error;
@@ -114,6 +114,8 @@ impl<T, A: AllocRef + Default> Default for Heap<T, A> {
 }
 
 unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
+    const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
+
     fn capacity(&self) -> usize { crate::raw::capacity(self.capacity, size_of::<T>(), size_of::<U>()) }
 
     fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }

@@ -239,6 +239,7 @@ impl<T, S: ?Sized + Storage<T>> Drop for GenericVec<T, S> {
 impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty `GenericVec` with the given backend
     pub fn with_storage(storage: S) -> Self {
+        assert!(S::IS_ALIGNED, "The storage is aligned to `T`");
         Self {
             storage,
             len: 0,
@@ -251,6 +252,7 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
 impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty `GenericVec` with the given backend
     pub const fn with_storage(storage: S) -> Self {
+        assert!(S::IS_ALIGNED, "The storage is aligned to `T`");
         Self {
             storage,
             len: 0,

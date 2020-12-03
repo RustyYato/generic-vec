@@ -1,6 +1,6 @@
 use crate::raw::{AllocError, Init, Storage, Uninit};
 
-use core::mem::{size_of, MaybeUninit};
+use core::mem::{align_of, size_of, MaybeUninit};
 
 /// An uninitialized slice storage
 pub type UninitSlice<'a, T> = Uninit<&'a mut [MaybeUninit<T>]>;
@@ -11,6 +11,8 @@ unsafe impl<T> Send for UninitSlice<'_, T> {}
 unsafe impl<T> Sync for UninitSlice<'_, T> {}
 
 unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
+    const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
+
     fn capacity(&self) -> usize { crate::raw::capacity(self.0.len(), size_of::<T>(), size_of::<U>()) }
 
     fn as_ptr(&self) -> *const U { self.0.as_ptr().cast() }
@@ -35,6 +37,8 @@ unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
 
 unsafe impl<T: Copy> crate::raw::StorageInit<T> for Slice<'_, T> {}
 unsafe impl<T: Copy> Storage<T> for Slice<'_, T> {
+    const IS_ALIGNED: bool = true;
+
     fn capacity(&self) -> usize { self.0.len() }
 
     fn as_ptr(&self) -> *const T { self.0.as_ptr().cast() }

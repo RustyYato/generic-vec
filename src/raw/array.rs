@@ -1,5 +1,5 @@
 use crate::raw::{AllocError, Init, Storage, StorageWithCapacity, Uninit};
-use core::mem::{size_of, MaybeUninit};
+use core::mem::{align_of, size_of, MaybeUninit};
 
 /// An uninitialized array storage
 pub type UninitArray<T, const N: usize> = Uninit<MaybeUninit<[T; N]>>;
@@ -62,6 +62,7 @@ impl<U, T, const N: usize> StorageWithCapacity<U> for UninitArray<T, N> {
 unsafe impl<U, T, const N: usize> Storage<U> for UninitArray<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(crate::raw::capacity(N, size_of::<T>(), size_of::<U>()));
+    const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
     fn capacity(&self) -> usize { <Self as Storage<U>>::CONST_CAPACITY.unwrap() }
 
@@ -109,6 +110,7 @@ impl<T: Default + Copy, const N: usize> StorageWithCapacity<T> for Array<T, N> {
 unsafe impl<T: Copy, const N: usize> Storage<T> for Array<T, N> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = Some(N);
+    const IS_ALIGNED: bool = true;
 
     fn capacity(&self) -> usize { N }
 

@@ -44,6 +44,7 @@ impl<T> ZeroSized<T> {
 
 unsafe impl<T> Storage<T> for ZeroSized<T> {
     const CONST_CAPACITY: Option<usize> = Some(usize::MAX);
+    const IS_ALIGNED: bool = true;
 
     #[inline]
     fn as_ptr(&self) -> *const T { Self::DANGLING }

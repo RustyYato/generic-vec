@@ -154,14 +154,12 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
     pub fn write_front_len(&self) -> usize {
         if self.is_empty() {
             self.write_len()
+        } else if Self::IS_ZS {
+            (self.read_front as usize).wrapping_sub(self.write_front as usize)
+        } else if self.is_write_empty() {
+            0
         } else {
-            if Self::IS_ZS {
-                (self.read_front as usize).wrapping_sub(self.write_front as usize)
-            } else if self.is_write_empty() {
-                0
-            } else {
-                unsafe { self.read_front.offset_from(self.write_front) as usize }
-            }
+            unsafe { self.read_front.offset_from(self.write_front) as usize }
         }
     }
 
@@ -170,14 +168,12 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
     pub fn write_back_len(&self) -> usize {
         if self.is_empty() {
             self.write_len()
+        } else if Self::IS_ZS {
+            (self.write_back as usize).wrapping_sub(self.read_back as usize)
+        } else if self.is_write_empty() {
+            0
         } else {
-            if Self::IS_ZS {
-                (self.write_back as usize).wrapping_sub(self.read_back as usize)
-            } else if self.is_write_empty() {
-                0
-            } else {
-                unsafe { self.write_back.offset_from(self.read_back) as usize }
-            }
+            unsafe { self.write_back.offset_from(self.read_back) as usize }
         }
     }
 
