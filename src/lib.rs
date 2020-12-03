@@ -168,7 +168,7 @@ pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
 /// A counter vector that can only store zero-sized types
 pub type ZSVec<T> = GenericVec<T, raw::ZeroSized<T>>;
 
-use iter::{Drain, DrainFilter, RawDrain, Splice};
+use iter::{Drain, DrainFilter, RawCursor, Splice};
 
 #[doc(hidden)]
 pub mod macros {
@@ -1386,7 +1386,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     }
 
     /// Creates a raw drain that can be used to remove elements in the specified range.
-    /// Usage of [`RawDrain`] is `unsafe` because it doesn't do any checks because is
+    /// Usage of [`RawCursor`] is `unsafe` because it doesn't do any checks because is
     /// meant to be a low level tool to implement fancier iterators, like [`GenericVec::drain`],
     /// [`GenericVec::drain_filter`], or [`GenericVec::splice`].
     ///
@@ -1394,11 +1394,11 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
     #[inline]
-    pub fn raw_drain<R>(&mut self, range: R) -> RawDrain<'_, T, S>
+    pub fn raw_drain<R>(&mut self, range: R) -> RawCursor<'_, T, S>
     where
         R: RangeBounds<usize>,
     {
-        RawDrain::new(self, range)
+        RawCursor::new(self, range)
     }
 
     /// Creates a draining iterator that removes the specified range in the

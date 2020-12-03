@@ -1,4 +1,4 @@
-use crate::{RawDrain, Storage};
+use crate::{RawCursor, Storage};
 
 use core::iter::FusedIterator;
 
@@ -9,7 +9,7 @@ where
     S: ?Sized + Storage<T>,
     F: FnMut(&mut T) -> bool,
 {
-    raw: RawDrain<'a, T, S>,
+    raw: RawCursor<'a, T, S>,
     filter: F,
 }
 
@@ -18,7 +18,7 @@ where
     S: ?Sized + Storage<T>,
     F: FnMut(&mut T) -> bool,
 {
-    pub(crate) fn new(raw: RawDrain<'a, T, S>, filter: F) -> Self { Self { raw, filter } }
+    pub(crate) fn new(raw: RawCursor<'a, T, S>, filter: F) -> Self { Self { raw, filter } }
 }
 
 impl<T, S, F> Drop for DrainFilter<'_, T, S, F>

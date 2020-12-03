@@ -1,4 +1,4 @@
-use crate::{RawDrain, Storage};
+use crate::{RawCursor, Storage};
 
 use core::mem::ManuallyDrop;
 
@@ -9,12 +9,12 @@ where
     S: ?Sized + Storage<T>,
     I: Iterator<Item = T>,
 {
-    raw: RawDrain<'a, T, S>,
+    raw: RawCursor<'a, T, S>,
     replace_with: I,
 }
 
 impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Splice<'a, T, S, I> {
-    pub(crate) fn new(raw: RawDrain<'a, T, S>, replace_with: I) -> Self { Self { raw, replace_with } }
+    pub(crate) fn new(raw: RawCursor<'a, T, S>, replace_with: I) -> Self { Self { raw, replace_with } }
 }
 
 impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S, I> {

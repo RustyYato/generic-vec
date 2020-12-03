@@ -1,15 +1,15 @@
-use crate::{RawDrain, Storage};
+use crate::{RawCursor, Storage};
 
 use core::iter::FusedIterator;
 
 /// This struct is created by [`GenericVec::drain`](crate::GenericVec::drain).
 /// See its documentation for more.
 pub struct Drain<'a, T, S: ?Sized + Storage<T>> {
-    raw: RawDrain<'a, T, S>,
+    raw: RawCursor<'a, T, S>,
 }
 
-impl<'a, T, S: ?Sized + Storage<T>> From<RawDrain<'a, T, S>> for Drain<'a, T, S> {
-    fn from(raw: RawDrain<'a, T, S>) -> Self { Self { raw } }
+impl<'a, T, S: ?Sized + Storage<T>> From<RawCursor<'a, T, S>> for Drain<'a, T, S> {
+    fn from(raw: RawCursor<'a, T, S>) -> Self { Self { raw } }
 }
 
 impl<T, S: ?Sized + Storage<T>> FusedIterator for Drain<'_, T, S> {}

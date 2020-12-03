@@ -6,7 +6,7 @@ use core::{
 };
 
 /// This struct is created by [`GenericVec::raw_drain`]. See its documentation for more.
-pub struct RawDrain<'a, T, S: ?Sized + Storage<T>> {
+pub struct RawCursor<'a, T, S: ?Sized + Storage<T>> {
     vec: NonNull<GenericVec<T, S>>,
     old_vec_len: usize,
     write_front: *mut T,
@@ -16,7 +16,7 @@ pub struct RawDrain<'a, T, S: ?Sized + Storage<T>> {
     mark: PhantomData<&'a mut GenericVec<T, S>>,
 }
 
-impl<T, S: ?Sized + Storage<T>> Drop for RawDrain<'_, T, S> {
+impl<T, S: ?Sized + Storage<T>> Drop for RawCursor<'_, T, S> {
     fn drop(&mut self) { self.finish() }
 }
 
@@ -73,7 +73,7 @@ pub(crate) fn check_range<R: RangeBounds<usize>>(len: usize, range: R) -> core::
     start..end
 }
 
-impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
+impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
     pub(crate) const IS_ZS: bool = core::mem::size_of::<T>() == 0;
     const ZS_PTR: *mut T = NonNull::<T>::dangling().as_ptr();
 
@@ -164,9 +164,9 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     /// Get a mutable reference to the underlying vector
     pub(crate) unsafe fn vec_mut(&mut self) -> &mut GenericVec<T, S> { unsafe { self.vec.as_mut() } }
 
-    /// The number of remaining elements in range of this `RawDrain`
+    /// The number of remaining elements in range of this `RawCursor`
     ///
-    /// The `RawDrain` is complete when there are 0 remaining elements
+    /// The `RawCursor` is complete when there are 0 remaining elements
     #[inline]
     pub fn remaining(&self) -> usize {
         if Self::IS_ZS {
@@ -176,21 +176,21 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Returns `true` if the `RawDrain` is complete
+    /// Returns `true` if the `RawCursor` is complete
     #[inline]
     pub fn is_complete(&self) -> bool { self.read_back == self.read_front }
 
-    /// Returns `true` if the `RawDrain` is complete
+    /// Returns `true` if the `RawCursor` is complete
     #[inline]
     pub fn is_write_complete(&self) -> bool { self.write_back == self.write_front }
 
-    /// Returns a reference to the next element if the `RawDrain`
+    /// Returns a reference to the next element if the `RawCursor`
     ///
-    /// Note: this does *not* advance the `RawDrain`
+    /// Note: this does *not* advance the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn front(&mut self) -> &mut T {
         if Self::IS_ZS {
@@ -200,13 +200,13 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Returns a reference to the last element if the `RawDrain`
+    /// Returns a reference to the last element if the `RawCursor`
     ///
-    /// Note: this does *not* advance the `RawDrain`
+    /// Note: this does *not* advance the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn back(&mut self) -> &mut T {
         if Self::IS_ZS {
@@ -216,15 +216,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Removes the next element of the `RawDrain`, and the underlying [`GenericVec`]
-    /// and advances the `RawDrain`
+    /// Removes the next element of the `RawCursor`, and the underlying [`GenericVec`]
+    /// and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn take_front(&mut self) -> T {
-        debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
+        debug_assert!(!self.is_complete(), "Cannot take from a complete RawCursor");
 
         unsafe {
             if Self::IS_ZS {
@@ -238,15 +238,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Removes the last element of the `RawDrain`, and the underlying [`GenericVec`]
-    /// and advances the `RawDrain`
+    /// Removes the last element of the `RawCursor`, and the underlying [`GenericVec`]
+    /// and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn take_back(&mut self) -> T {
-        debug_assert!(!self.is_complete(), "Cannot take from a complete RawDrain");
+        debug_assert!(!self.is_complete(), "Cannot take from a complete RawCursor");
 
         unsafe {
             if Self::IS_ZS {
@@ -259,13 +259,13 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Check if it is safe to write to the front of the `RawDrain`
+    /// Check if it is safe to write to the front of the `RawCursor`
     pub fn can_write_front(&self) -> bool { !self.is_write_complete() && self.write_front != self.read_front }
 
-    /// Check if it is safe to write to the back of the `RawDrain`
+    /// Check if it is safe to write to the back of the `RawCursor`
     pub fn can_write_back(&self) -> bool { !self.is_write_complete() && self.write_back != self.read_back }
 
-    /// Returns the number of times you can safely call [`RawDrain::write_front`]
+    /// Returns the number of times you can safely call [`RawCursor::write_front`]
     pub fn write_slots_front(&self) -> usize {
         if Self::IS_ZS {
             (self.read_front as usize).wrapping_sub(self.write_front as usize)
@@ -276,7 +276,7 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Returns the number of times you can safely call [`RawDrain::write_back`]
+    /// Returns the number of times you can safely call [`RawCursor::write_back`]
     pub fn write_slots_back(&self) -> usize {
         if Self::IS_ZS {
             (self.write_back as usize).wrapping_sub(self.read_back as usize)
@@ -287,17 +287,17 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the next element of the `RawDrain`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the next element of the `RawCursor`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be write-complete
+    /// The `RawCursor` must not be write-complete
     #[inline]
     pub unsafe fn write_front(&mut self, value: T) {
         debug_assert!(
             self.can_write_front(),
-            "Cannot write to a complete `RawDrain` or if there are not empty slots at the front of the `RawDrain`"
+            "Cannot write to a complete `RawCursor` or if there are not empty slots at the front of the `RawCursor`"
         );
 
         unsafe {
@@ -311,17 +311,17 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the next element of the `RawDrain`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the next element of the `RawCursor`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be write-complete
+    /// The `RawCursor` must not be write-complete
     #[inline]
     pub unsafe fn write_back(&mut self, value: T) {
         debug_assert!(
             self.can_write_back(),
-            "Cannot write to a complete `RawDrain` or if there are not empty slots at the back of the `RawDrain`"
+            "Cannot write to a complete `RawCursor` or if there are not empty slots at the back of the `RawCursor`"
         );
 
         unsafe {
@@ -335,15 +335,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the next element of the `RawDrain`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the next element of the `RawCursor`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn skip_front(&mut self) {
-        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawDrain");
+        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawCursor");
 
         unsafe {
             if Self::IS_ZS {
@@ -358,15 +358,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the last element of the `RawDrain`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the last element of the `RawCursor`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must not be complete
+    /// The `RawCursor` must not be complete
     #[inline]
     pub unsafe fn skip_back(&mut self) {
-        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawDrain");
+        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawCursor");
 
         unsafe {
             if Self::IS_ZS {
@@ -381,12 +381,12 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the next `n` elements of the `RawDrain`, and keeps them in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the next `n` elements of the `RawCursor`, and keeps them in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` have at least n remaining elements
+    /// The `RawCursor` have at least n remaining elements
     #[inline]
     pub unsafe fn skip_n_front(&mut self, n: usize) {
         debug_assert!(self.remaining() >= n);
@@ -405,12 +405,12 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
-    /// Skips the last `n` elements of the `RawDrain`, and keeps them in the
-    /// underlying [`GenericVec`] and advances the `RawDrain`
+    /// Skips the last `n` elements of the `RawCursor`, and keeps them in the
+    /// underlying [`GenericVec`] and advances the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` have at least n remaining elements
+    /// The `RawCursor` have at least n remaining elements
     #[inline]
     pub unsafe fn skip_n_back(&mut self, n: usize) {
         debug_assert!(self.remaining() >= n);
@@ -430,11 +430,11 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     }
 
     // TODO: this doc is bad, improve it
-    /// Write the value into empty space at the front of the `RawDrain`
+    /// Write the value into empty space at the front of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must have taken at least 1 more element than it has
+    /// The `RawCursor` must have taken at least 1 more element than it has
     /// written from the front
     pub unsafe fn consume_write_front(&mut self, value: T) {
         if Self::IS_ZS {
@@ -449,11 +449,11 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     }
 
     // TODO: this doc is bad, improve it
-    /// Write the value into empty space at the back of the `RawDrain`
+    /// Write the value into empty space at the back of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must have taken at least 1 more element than it has
+    /// The `RawCursor` must have taken at least 1 more element than it has
     /// written from the back
     pub unsafe fn consume_write_back(&mut self, value: T) {
         if Self::IS_ZS {
@@ -468,11 +468,11 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     }
 
     // TODO: this doc is bad, improve it
-    /// Write the slice into empty space at the front of the `RawDrain`
+    /// Write the slice into empty space at the front of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must have taken at least `slice.len()` more element than it has
+    /// The `RawCursor` must have taken at least `slice.len()` more element than it has
     /// written from the front
     pub unsafe fn consume_write_slice_front(&mut self, slice: &[T]) {
         unsafe {
@@ -486,11 +486,11 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     }
 
     // TODO: this doc is bad, improve it
-    /// Write the slice into empty space at the back of the `RawDrain`
+    /// Write the slice into empty space at the back of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawDrain` must have taken at least `slice.len()` more element than it has
+    /// The `RawCursor` must have taken at least `slice.len()` more element than it has
     /// written from the back
     pub unsafe fn consume_write_slice_back(&mut self, slice: &[T]) {
         unsafe {
@@ -504,15 +504,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     }
 
     /// Assert that there is at least `space` elements of room left to write into
-    /// the `RawDrain`, and the underlying [`GenericVec`]
+    /// the `RawCursor`, and the underlying [`GenericVec`]
     ///
     /// # Safety
     ///
-    /// the `RawDrain` must be complete
+    /// the `RawCursor` must be complete
     pub unsafe fn assert_space(&mut self, space: usize) {
         debug_assert!(
             self.is_complete(),
-            "You can only call `assert_space` on a complete `RawDrain`, this is UB in release mode!"
+            "You can only call `assert_space` on a complete `RawCursor`, this is UB in release mode!"
         );
         unsafe {
             if Self::IS_ZS {

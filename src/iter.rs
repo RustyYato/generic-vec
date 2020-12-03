@@ -3,13 +3,13 @@
 mod drain;
 mod drain_filter;
 mod into_iter;
-mod raw_drain;
+mod raw_cursor;
 mod splice;
 
 pub use drain::Drain;
 pub use drain_filter::DrainFilter;
 pub use into_iter::IntoIter;
-pub use raw_drain::RawDrain;
+pub use raw_cursor::RawCursor;
 pub use splice::Splice;
 
 use core::iter::FromIterator;
