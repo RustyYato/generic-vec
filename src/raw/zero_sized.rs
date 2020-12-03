@@ -29,6 +29,16 @@ impl<T> ZeroSized<T> {
     /// ```
     pub const NEW: Self = ZeroSized([PhantomData][core::mem::size_of::<T>()]);
 
+    /// Try to create a new zero-sized allocator, will be `None`
+    /// if the type is not zero sized
+    ///
+    /// ```rust
+    /// # use generic_vec::raw::ZeroSized;
+    /// assert!(ZeroSized::<[i32; 0]>::TRY_NEW.is_some());
+    /// assert!(ZeroSized::<u8>::TRY_NEW.is_none());
+    /// ```
+    pub const TRY_NEW: Option<Self> = [None, Some(ZeroSized(PhantomData))][(core::mem::size_of::<T>() == 0) as usize];
+
     const DANGLING: *mut T = core::mem::align_of::<T>() as *mut T;
 }
 

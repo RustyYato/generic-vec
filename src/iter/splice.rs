@@ -1,5 +1,7 @@
 use crate::{RawDrain, Storage};
 
+use core::mem::ManuallyDrop;
+
 /// This struct is created by [`GenericVec::splice`](crate::GenericVec::splice).
 /// See its documentation for more.
 pub struct Splice<'a, T, S, I>
@@ -21,6 +23,30 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
 
         let Self { raw, replace_with } = self;
 
+        if let Some(storage) = crate::raw::ZeroSized::TRY_NEW {
+            unsafe {
+                let mut vec = ManuallyDrop::new(crate::ZSVec::with_storage(storage));
+                vec.extend(replace_with);
+                let len = vec.len();
+                raw.assert_space(len);
+                raw.consume_write_slice_front(vec.as_slice());
+                return
+            }
+        }
+
+        if raw.at_back_of_vec() {
+            self.raw.finish();
+            unsafe { self.raw.vec_mut().extend(replace_with) }
+            return
+        }
+
+        while !raw.is_write_complete() {
+            match replace_with.next() {
+                Some(value) => unsafe { raw.write_front(value) },
+                None => return,
+            }
+        }
+
         #[cfg(not(feature = "alloc"))]
         {
             const CAPACITY: usize = 16;
@@ -31,7 +57,7 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
             replace_with.for_each(|item| unsafe {
                 buffer.push_unchecked(item);
 
-                if !RawDrain::<T, S>::IS_ZS && buffer.is_full() {
+                if buffer.is_full() {
                     unsafe {
                         raw.assert_space(buffer.len());
                         raw.consume_write_slice_front(&buffer);
@@ -49,7 +75,7 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
 
         #[cfg(feature = "alloc")]
         {
-            let mut temp: std::vec::Vec<_> = replace_with.collect();
+            let mut temp: std::vec::Vec<T> = replace_with.collect();
 
             unsafe {
                 raw.assert_space(temp.len());
@@ -60,24 +86,31 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
     }
 }
 
+impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> ExactSizeIterator for Splice<'_, T, S, I> {}
+
 impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Iterator for Splice<'a, T, S, I> {
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.raw.is_complete() {
-            return None
+            None
+        } else {
+            Some(unsafe { self.raw.take_front() })
         }
+    }
 
-        unsafe {
-            let front = self.raw.front();
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.raw.remaining();
+        (size, Some(size))
+    }
+}
 
-            Some(if let Some(item) = self.replace_with.next() {
-                let item = core::mem::replace(front, item);
-                self.raw.skip_front();
-                item
-            } else {
-                self.raw.take_front()
-            })
+impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> DoubleEndedIterator for Splice<'a, T, S, I> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.raw.is_complete() {
+            None
+        } else {
+            Some(unsafe { self.raw.take_back() })
         }
     }
 }

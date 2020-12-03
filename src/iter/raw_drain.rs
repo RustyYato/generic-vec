@@ -7,7 +7,7 @@ use core::{
 
 /// This struct is created by [`GenericVec::raw_drain`]. See its documentation for more.
 pub struct RawDrain<'a, T, S: ?Sized + Storage<T>> {
-    vec: *mut GenericVec<T, S>,
+    vec: NonNull<GenericVec<T, S>>,
     old_vec_len: usize,
     write_front: *mut T,
     read_front: *mut T,
@@ -17,31 +17,7 @@ pub struct RawDrain<'a, T, S: ?Sized + Storage<T>> {
 }
 
 impl<T, S: ?Sized + Storage<T>> Drop for RawDrain<'_, T, S> {
-    fn drop(&mut self) {
-        unsafe {
-            self.skip_n_front(self.remaining());
-
-            if Self::IS_ZS {
-                let front_len = self.write_front as usize;
-                let back_len = self.old_vec_len.wrapping_sub(self.write_back as usize);
-                let len = front_len + back_len;
-                (*self.vec).set_len_unchecked(len);
-            } else {
-                let start = (*self.vec).as_mut_ptr();
-                let range = start..start.add(self.old_vec_len);
-
-                let front_len = self.write_front.offset_from(range.start) as usize;
-                let back_len = range.end.offset_from(self.write_back) as usize;
-                let len = front_len + back_len;
-
-                if self.write_front != self.write_back {
-                    self.write_front.copy_from(self.write_back, back_len);
-                }
-
-                (*self.vec).set_len_unchecked(len);
-            }
-        }
-    }
+    fn drop(&mut self) { self.finish() }
 }
 
 #[inline(never)]
@@ -107,8 +83,8 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         R: RangeBounds<usize>,
     {
         unsafe {
-            let raw_vec = vec as *mut GenericVec<T, S>;
-            let vec = &mut *raw_vec;
+            let mut raw_vec = NonNull::from(vec);
+            let vec = raw_vec.as_mut();
             let old_vec_len = vec.len();
 
             let range = check_range(old_vec_len, range);
@@ -144,6 +120,50 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
         }
     }
 
+    /// Skip all the remaining elements, and ensure that the [`GenericVec`] is
+    /// valid
+    pub fn finish(&mut self) {
+        unsafe {
+            if self.old_vec_len == 0 {
+                return
+            }
+
+            self.skip_n_front(self.remaining());
+
+            if Self::IS_ZS {
+                let front_len = self.write_front as usize;
+                let back_len = self.old_vec_len.wrapping_sub(self.write_back as usize);
+                let len = front_len + back_len;
+                self.vec.as_mut().set_len_unchecked(len);
+            } else {
+                let start = self.vec.as_mut().as_mut_ptr();
+                let range = start..start.add(self.old_vec_len);
+
+                let front_len = self.write_front.offset_from(range.start) as usize;
+                let back_len = range.end.offset_from(self.write_back) as usize;
+                let len = front_len + back_len;
+
+                if self.write_front != self.write_back {
+                    self.write_front.copy_from(self.write_back, back_len);
+                }
+
+                self.vec.as_mut().set_len_unchecked(len);
+            }
+        }
+    }
+
+    /// Check if the both write pointers are and the end of the vector
+    pub(crate) fn at_back_of_vec(&self) -> bool {
+        unsafe {
+            let vec = self.vec.as_ref();
+            let end = vec.as_ptr().add(self.old_vec_len);
+            end == self.write_back && end == self.write_front
+        }
+    }
+
+    /// Get a mutable reference to the underlying vector
+    pub(crate) unsafe fn vec_mut(&mut self) -> &mut GenericVec<T, S> { unsafe { self.vec.as_mut() } }
+
     /// The number of remaining elements in range of this `RawDrain`
     ///
     /// The `RawDrain` is complete when there are 0 remaining elements
@@ -159,6 +179,10 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
     /// Returns `true` if the `RawDrain` is complete
     #[inline]
     pub fn is_complete(&self) -> bool { self.read_back == self.read_front }
+
+    /// Returns `true` if the `RawDrain` is complete
+    #[inline]
+    pub fn is_write_complete(&self) -> bool { self.write_back == self.write_front }
 
     /// Returns a reference to the next element if the `RawDrain`
     ///
@@ -231,6 +255,82 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
             } else {
                 self.read_back = self.read_back.sub(1);
                 self.read_back.read()
+            }
+        }
+    }
+
+    /// Check if it is safe to write to the front of the `RawDrain`
+    pub fn can_write_front(&self) -> bool { !self.is_write_complete() && self.write_front != self.read_front }
+
+    /// Check if it is safe to write to the back of the `RawDrain`
+    pub fn can_write_back(&self) -> bool { !self.is_write_complete() && self.write_back != self.read_back }
+
+    /// Returns the number of times you can safely call [`RawDrain::write_front`]
+    pub fn write_slots_front(&self) -> usize {
+        if Self::IS_ZS {
+            (self.read_front as usize).wrapping_sub(self.write_front as usize)
+        } else if self.is_write_complete() {
+            0
+        } else {
+            unsafe { self.read_front.offset_from(self.write_front) as usize }
+        }
+    }
+
+    /// Returns the number of times you can safely call [`RawDrain::write_back`]
+    pub fn write_slots_back(&self) -> usize {
+        if Self::IS_ZS {
+            (self.write_back as usize).wrapping_sub(self.read_back as usize)
+        } else if self.is_write_complete() {
+            0
+        } else {
+            unsafe { self.write_back.offset_from(self.read_back) as usize }
+        }
+    }
+
+    /// Skips the next element of the `RawDrain`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be write-complete
+    #[inline]
+    pub unsafe fn write_front(&mut self, value: T) {
+        debug_assert!(
+            self.can_write_front(),
+            "Cannot write to a complete `RawDrain` or if there are not empty slots at the front of the `RawDrain`"
+        );
+
+        unsafe {
+            if Self::IS_ZS {
+                core::mem::forget(value);
+                self.write_front = (self.write_front as usize).wrapping_add(1) as _;
+            } else {
+                self.write_front.write(value);
+                self.write_front = self.write_front.add(1);
+            }
+        }
+    }
+
+    /// Skips the next element of the `RawDrain`, and keeps the element in the
+    /// underlying [`GenericVec`] and advances the `RawDrain`
+    ///
+    /// # Safety
+    ///
+    /// The `RawDrain` must not be write-complete
+    #[inline]
+    pub unsafe fn write_back(&mut self, value: T) {
+        debug_assert!(
+            self.can_write_back(),
+            "Cannot write to a complete `RawDrain` or if there are not empty slots at the back of the `RawDrain`"
+        );
+
+        unsafe {
+            if Self::IS_ZS {
+                core::mem::forget(value);
+                self.write_back = (self.write_back as usize).wrapping_sub(1) as _;
+            } else {
+                self.write_back = self.write_back.sub(1);
+                self.write_back.write(value);
             }
         }
     }
@@ -429,8 +529,8 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
                     return
                 }
 
-                let start = (*self.vec).as_mut_ptr();
-                let capacity = (*self.vec).capacity();
+                let capacity = self.vec.as_ref().capacity();
+                let start = self.vec.as_mut().as_mut_ptr();
                 let range = start..start.add(self.old_vec_len);
 
                 let front_len = self.write_front.offset_from(range.start) as usize;
@@ -443,7 +543,7 @@ impl<'a, T, S: ?Sized + Storage<T>> RawDrain<'a, T, S> {
                     let rf = self.read_front.offset_from(range.start) as usize;
                     let rb = self.read_back.offset_from(range.start) as usize;
 
-                    let vec = &mut *self.vec;
+                    let vec = self.vec.as_mut();
                     vec.storage.reserve(len + space);
 
                     let start = vec.as_mut_ptr();
