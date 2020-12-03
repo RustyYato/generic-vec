@@ -10,7 +10,7 @@ fn raw_drain_front() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_front(), "0");
             assert_eq!(drain.take_front(), "2");
@@ -24,7 +24,7 @@ fn raw_drain_front() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_front(), "0");
             assert_eq!(drain.take_front(), "2");
@@ -37,7 +37,7 @@ fn raw_drain_front() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_front(), "1");
             drain.skip_front();
@@ -51,7 +51,7 @@ fn raw_drain_front() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_front(), "0");
         }
@@ -59,10 +59,7 @@ fn raw_drain_front() {
         assert_eq!(vec, S!([1, 0, 2, 1]))
     });
 
-    assert_eq!(
-        output.mem_allocated(),
-        output.mem_freed() + leak!(raw_drain_front)
-    );
+    assert_eq!(output.mem_allocated(), output.mem_freed() + leak!(raw_drain_front));
 }
 
 #[test]
@@ -75,7 +72,7 @@ fn raw_drain_back() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_back(), "1");
             assert_eq!(drain.take_back(), "2");
@@ -89,7 +86,7 @@ fn raw_drain_back() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_back(), "1");
             assert_eq!(drain.take_back(), "2");
@@ -102,7 +99,7 @@ fn raw_drain_back() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_back(), "1");
             drain.skip_back();
@@ -116,7 +113,7 @@ fn raw_drain_back() {
         vec.push(S!("1"));
 
         unsafe {
-            let mut drain = vec.raw_drain(..);
+            let mut drain = vec.raw_cursor(..);
 
             assert_eq!(drain.take_back(), "1");
         }
@@ -124,10 +121,7 @@ fn raw_drain_back() {
         assert_eq!(vec, S!([0, 2, 0, 2]))
     });
 
-    assert_eq!(
-        output.mem_allocated(),
-        output.mem_freed() + leak!(raw_drain_back)
-    );
+    assert_eq!(output.mem_allocated(), output.mem_freed() + leak!(raw_drain_back));
 }
 
 #[test]
@@ -157,26 +151,19 @@ fn drain_filter() {
         new_vec!(mut vec, max(8));
 
         vec.extend(
-            [
-                "0", "00", "000", "0000", "00000", "000000", "0000000", "00000000",
-            ]
-            .iter()
-            .map(|x| S!(x)),
+            ["0", "00", "000", "0000", "00000", "000000", "0000000", "00000000"]
+                .iter()
+                .map(|x| S!(x)),
         );
 
         vec.drain_filter(.., |x| x.len() % 2 == 0);
 
         assert_eq!(vec, S!(["0", "000", "00000", "0000000",]));
 
-        assert!(vec
-            .drain_filter(.., |x| x.len() % 3 == 0)
-            .eq(Some(S!("000"))));
+        assert!(vec.drain_filter(.., |x| x.len() % 3 == 0).eq(Some(S!("000"))));
 
         assert_eq!(vec, S!(["0", "00000", "0000000",]));
     });
 
-    assert_eq!(
-        output.mem_allocated(),
-        output.mem_freed() + leak!(drain_filter)
-    );
+    assert_eq!(output.mem_allocated(), output.mem_freed() + leak!(drain_filter));
 }

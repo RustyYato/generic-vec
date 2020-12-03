@@ -1,4 +1,4 @@
-use crate::{RawCursor, Storage};
+use crate::{iter::RawCursor, Storage};
 
 use core::mem::ManuallyDrop;
 
@@ -19,7 +19,9 @@ impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Splice<'a, T, S, I> {
 
 impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S, I> {
     fn drop(&mut self) {
-        self.for_each(drop);
+        unsafe {
+            self.raw.drop_n_front(self.raw.len());
+        }
 
         let Self { raw, replace_with } = self;
 
@@ -28,8 +30,8 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
                 let mut vec = ManuallyDrop::new(crate::ZSVec::with_storage(storage));
                 vec.extend(replace_with);
                 let len = vec.len();
-                raw.assert_space(len);
-                raw.consume_write_slice_front(vec.as_slice());
+                raw.reserve(len);
+                raw.write_slice_front(vec.as_slice());
                 return
             }
         }
@@ -40,7 +42,7 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
             return
         }
 
-        while !raw.is_write_complete() {
+        while !raw.is_write_empty() {
             match replace_with.next() {
                 Some(value) => unsafe { raw.write_front(value) },
                 None => return,
@@ -59,16 +61,16 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
 
                 if buffer.is_full() {
                     unsafe {
-                        raw.assert_space(buffer.len());
-                        raw.consume_write_slice_front(&buffer);
+                        raw.reserve(buffer.len());
+                        raw.write_slice_front(&buffer);
                         buffer.set_len_unchecked(0);
                     }
                 }
             });
 
             unsafe {
-                raw.assert_space(buffer.len());
-                raw.consume_write_slice_front(&buffer);
+                raw.reserve(buffer.len());
+                raw.write_slice_front(&buffer);
                 core::mem::forget(buffer);
             }
         }
@@ -78,8 +80,8 @@ impl<T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Drop for Splice<'_, T, S,
             let mut temp: std::vec::Vec<T> = replace_with.collect();
 
             unsafe {
-                raw.assert_space(temp.len());
-                raw.consume_write_slice_front(&temp);
+                raw.reserve(temp.len());
+                raw.write_slice_front(&temp);
                 temp.set_len(0);
             }
         }
@@ -92,7 +94,7 @@ impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Iterator for Splice<'
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.raw.is_complete() {
+        if self.raw.is_empty() {
             None
         } else {
             Some(unsafe { self.raw.take_front() })
@@ -100,14 +102,14 @@ impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> Iterator for Splice<'
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.raw.remaining();
+        let size = self.raw.len();
         (size, Some(size))
     }
 }
 
 impl<'a, T, S: ?Sized + Storage<T>, I: Iterator<Item = T>> DoubleEndedIterator for Splice<'a, T, S, I> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.raw.is_complete() {
+        if self.raw.is_empty() {
             None
         } else {
             Some(unsafe { self.raw.take_back() })

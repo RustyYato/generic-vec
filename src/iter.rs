@@ -1,11 +1,13 @@
 //! The [`Iterator`] types that can be created from a [`GenericVec`]
 
+mod cursor;
 mod drain;
 mod drain_filter;
 mod into_iter;
 mod raw_cursor;
 mod splice;
 
+pub use cursor::Cursor;
 pub use drain::Drain;
 pub use drain_filter::DrainFilter;
 pub use into_iter::IntoIter;

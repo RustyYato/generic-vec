@@ -105,3 +105,58 @@ where
 
     slice.split_at_mut(next_write)
 }
+
+#[inline(never)]
+#[cold]
+#[track_caller]
+pub(super) fn slice_start_index_overflow_fail() -> ! {
+    panic!("attempted to index slice from after maximum usize");
+}
+
+#[inline(never)]
+#[cold]
+#[track_caller]
+pub(super) fn slice_end_index_overflow_fail() -> ! {
+    panic!("attempted to index slice up to maximum usize");
+}
+
+#[inline(never)]
+#[cold]
+#[track_caller]
+pub(super) fn slice_index_order_fail(index: usize, end: usize) -> ! {
+    panic!("slice index starts at {} but ends at {}", index, end);
+}
+
+#[inline(never)]
+#[cold]
+#[track_caller]
+pub(super) fn slice_end_index_len_fail(index: usize, len: usize) -> ! {
+    panic!("range end index {} out of range for slice of length {}", index, len);
+}
+
+use core::ops::{Bound, Range, RangeBounds};
+
+pub(crate) fn check_range<R: RangeBounds<usize>>(len: usize, range: R) -> Range<usize> {
+    let start = match range.start_bound() {
+        Bound::Included(&start) => start,
+        Bound::Excluded(start) => start
+            .checked_add(1)
+            .unwrap_or_else(|| slice_start_index_overflow_fail()),
+        Bound::Unbounded => 0,
+    };
+
+    let end = match range.end_bound() {
+        Bound::Included(end) => end.checked_add(1).unwrap_or_else(|| slice_end_index_overflow_fail()),
+        Bound::Excluded(&end) => end,
+        Bound::Unbounded => len,
+    };
+
+    if start > end {
+        slice_index_order_fail(start, end);
+    }
+    if end > len {
+        slice_end_index_len_fail(end, len);
+    }
+
+    start..end
+}

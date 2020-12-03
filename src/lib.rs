@@ -168,8 +168,6 @@ pub type InitSliceVec<'a, T> = GenericVec<T, raw::Slice<'a, T>>;
 /// A counter vector that can only store zero-sized types
 pub type ZSVec<T> = GenericVec<T, raw::ZeroSized<T>>;
 
-use iter::{Drain, DrainFilter, RawCursor, Splice};
-
 #[doc(hidden)]
 pub mod macros {
     pub use core::mem::MaybeUninit;
@@ -1385,20 +1383,37 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         self.split_off(0)
     }
 
-    /// Creates a raw drain that can be used to remove elements in the specified range.
-    /// Usage of [`RawCursor`] is `unsafe` because it doesn't do any checks because is
-    /// meant to be a low level tool to implement fancier iterators, like [`GenericVec::drain`],
-    /// [`GenericVec::drain_filter`], or [`GenericVec::splice`].
+    /// Creates a raw cursor that can be used to remove elements in the specified range.
+    /// Usage of [`RawCursor`](iter::RawCursor) is `unsafe` because it doesn't do any checks.
+    /// [`RawCursor`](iter::RawCursor) is meant to be a low level tool to implement fancier
+    /// iterators, like [`GenericVec::drain`], [`GenericVec::drain_filter`],
+    /// or [`GenericVec::splice`].
     ///
     /// # Panic
     ///
-    /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
+    /// Panics if the starting point is greater than the end point or if the end point
+    /// is greater than the length of the vector.
     #[inline]
-    pub fn raw_drain<R>(&mut self, range: R) -> RawCursor<'_, T, S>
+    pub fn raw_cursor<R>(&mut self, range: R) -> iter::RawCursor<'_, T, S>
     where
         R: RangeBounds<usize>,
     {
-        RawCursor::new(self, range)
+        let range = slice::check_range(self.len(), range);
+        iter::RawCursor::new(self, range)
+    }
+
+    /// Creates a cursor that can be used to remove elements in the specified range.
+    ///
+    /// # Panic
+    ///
+    /// Panics if the starting point is greater than the end point or if the end point
+    /// is greater than the length of the vector.
+    #[inline]
+    pub fn cursor<R>(&mut self, range: R) -> iter::Cursor<'_, T, S>
+    where
+        R: RangeBounds<usize>,
+    {
+        iter::Cursor::new(self.raw_cursor(range))
     }
 
     /// Creates a draining iterator that removes the specified range in the
@@ -1411,13 +1426,14 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// # Panic
     ///
-    /// Panics if the starting point is greater than the end point or if the end point is greater than the length of the vector.
+    /// Panics if the starting point is greater than the end point or if the end point
+    /// is greater than the length of the vector.
     #[inline]
-    pub fn drain<R>(&mut self, range: R) -> Drain<'_, T, S>
+    pub fn drain<R>(&mut self, range: R) -> iter::Drain<'_, T, S>
     where
         R: RangeBounds<usize>,
     {
-        self.raw_drain(range).into()
+        iter::Drain::new(self.raw_cursor(range))
     }
 
     /// Creates an iterator which uses a closure to determine if an element should be removed.
@@ -1425,29 +1441,43 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// If the closure returns true, then the element is removed and yielded.
     /// If the closure returns false, the element will remain in the vector
     /// and will not be yielded by the iterator.
+    ///
+    /// # Panic
+    ///
+    /// Panics if the starting point is greater than the end point or if the end point
+    /// is greater than the length of the vector.
     #[inline]
-    pub fn drain_filter<R, F>(&mut self, range: R, f: F) -> DrainFilter<'_, T, S, F>
+    pub fn drain_filter<R, F>(&mut self, range: R, f: F) -> iter::DrainFilter<'_, T, S, F>
     where
         R: RangeBounds<usize>,
         F: FnMut(&mut T) -> bool,
     {
-        DrainFilter::new(self.raw_drain(range), f)
+        iter::DrainFilter::new(self.raw_cursor(range), f)
     }
 
-    /// Creates a splicing iterator that replaces the specified range in the vector with the given replace_with iterator and yields the removed items. replace_with does not need to be the same length as range.
+    /// Creates a splicing iterator that replaces the specified range in the vector with
+    /// the given replace_with iterator and yields the removed items. replace_with does
+    /// not need to be the same length as range.
     ///
     /// range is removed even if the iterator is not consumed until the end.
     ///
-    /// It is unspecified how many elements are removed from the vector if the Splice value is leaked.
+    /// It is unspecified how many elements are removed from the vector if the
+    /// [`Splice`](iter::Splice) value is leaked.
     ///
-    /// The input iterator replace_with is only consumed when the Splice value is dropped
+    /// The input iterator replace_with is only consumed when the [`Splice`](iter::Splice)
+    /// value is dropped
+    ///
+    /// # Panic
+    ///
+    /// Panics if the starting point is greater than the end point or if the end point
+    /// is greater than the length of the vector.
     #[inline]
-    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, T, S, I::IntoIter>
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> iter::Splice<'_, T, S, I::IntoIter>
     where
         R: RangeBounds<usize>,
         I: IntoIterator<Item = T>,
     {
-        Splice::new(self.raw_drain(range), replace_with.into_iter())
+        iter::Splice::new(self.raw_cursor(range), replace_with.into_iter())
     }
 
     /// Retains only the elements specified by the predicate.
@@ -1530,7 +1560,6 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     where
         T: Clone,
     {
-        let source = source.as_ref();
         // If the `self` is longer than `source`, remove excess
         self.truncate(source.len());
 

@@ -1,11 +1,7 @@
 use crate::{GenericVec, Storage};
-use core::{
-    marker::PhantomData,
-    ops::{Bound, RangeBounds},
-    ptr::NonNull,
-};
+use core::{marker::PhantomData, ops::Range, ptr::NonNull};
 
-/// This struct is created by [`GenericVec::raw_drain`]. See its documentation for more.
+/// This struct is created by [`GenericVec::raw_cursor`]. See its documentation for more.
 pub struct RawCursor<'a, T, S: ?Sized + Storage<T>> {
     vec: NonNull<GenericVec<T, S>>,
     old_vec_len: usize,
@@ -16,61 +12,11 @@ pub struct RawCursor<'a, T, S: ?Sized + Storage<T>> {
     mark: PhantomData<&'a mut GenericVec<T, S>>,
 }
 
+unsafe impl<T: Send, S: ?Sized + Storage<T> + Send> Send for RawCursor<'_, T, S> {}
+unsafe impl<T: Sync, S: ?Sized + Storage<T> + Sync> Sync for RawCursor<'_, T, S> {}
+
 impl<T, S: ?Sized + Storage<T>> Drop for RawCursor<'_, T, S> {
     fn drop(&mut self) { self.finish() }
-}
-
-#[inline(never)]
-#[cold]
-#[track_caller]
-pub(super) fn slice_start_index_overflow_fail() -> ! {
-    panic!("attempted to index slice from after maximum usize");
-}
-
-#[inline(never)]
-#[cold]
-#[track_caller]
-pub(super) fn slice_end_index_overflow_fail() -> ! {
-    panic!("attempted to index slice up to maximum usize");
-}
-
-#[inline(never)]
-#[cold]
-#[track_caller]
-pub(super) fn slice_index_order_fail(index: usize, end: usize) -> ! {
-    panic!("slice index starts at {} but ends at {}", index, end);
-}
-
-#[inline(never)]
-#[cold]
-#[track_caller]
-pub(super) fn slice_end_index_len_fail(index: usize, len: usize) -> ! {
-    panic!("range end index {} out of range for slice of length {}", index, len);
-}
-
-pub(crate) fn check_range<R: RangeBounds<usize>>(len: usize, range: R) -> core::ops::Range<usize> {
-    let start = match range.start_bound() {
-        Bound::Included(&start) => start,
-        Bound::Excluded(start) => start
-            .checked_add(1)
-            .unwrap_or_else(|| slice_start_index_overflow_fail()),
-        Bound::Unbounded => 0,
-    };
-
-    let end = match range.end_bound() {
-        Bound::Included(end) => end.checked_add(1).unwrap_or_else(|| slice_end_index_overflow_fail()),
-        Bound::Excluded(&end) => end,
-        Bound::Unbounded => len,
-    };
-
-    if start > end {
-        slice_index_order_fail(start, end);
-    }
-    if end > len {
-        slice_end_index_len_fail(end, len);
-    }
-
-    start..end
 }
 
 impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
@@ -78,17 +24,11 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
     const ZS_PTR: *mut T = NonNull::<T>::dangling().as_ptr();
 
     #[inline]
-    pub(crate) fn new<R>(vec: &'a mut GenericVec<T, S>, range: R) -> Self
-    where
-        R: RangeBounds<usize>,
-    {
+    pub(crate) fn new(vec: &'a mut GenericVec<T, S>, Range { start, end }: Range<usize>) -> Self {
         unsafe {
             let mut raw_vec = NonNull::from(vec);
             let vec = raw_vec.as_mut();
             let old_vec_len = vec.len();
-
-            let range = check_range(old_vec_len, range);
-            let (start, end) = (range.start, range.end);
 
             if Self::IS_ZS {
                 vec.set_len_unchecked(start);
@@ -103,7 +43,7 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
                     mark: PhantomData,
                 }
             } else {
-                let range = vec[range].as_mut_ptr_range();
+                let range = vec[start..end].as_mut_ptr_range();
 
                 vec.set_len_unchecked(start);
 
@@ -128,7 +68,7 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
                 return
             }
 
-            self.skip_n_front(self.remaining());
+            self.skip_n_front(self.len());
 
             if Self::IS_ZS {
                 let front_len = self.write_front as usize;
@@ -166,9 +106,9 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
 
     /// The number of remaining elements in range of this `RawCursor`
     ///
-    /// The `RawCursor` is complete when there are 0 remaining elements
+    /// The `RawCursor` is empty when there are 0 remaining elements
     #[inline]
-    pub fn remaining(&self) -> usize {
+    pub fn len(&self) -> usize {
         if Self::IS_ZS {
             (self.read_back as usize).wrapping_sub(self.read_front as usize)
         } else {
@@ -176,23 +116,98 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Returns `true` if the `RawCursor` is complete
+    /// Returns `true` if the `RawCursor` is empty
     #[inline]
-    pub fn is_complete(&self) -> bool { self.read_back == self.read_front }
+    pub fn is_empty(&self) -> bool { self.read_back == self.read_front }
 
-    /// Returns `true` if the `RawCursor` is complete
+    /// Returns `true` if the `RawCursor` is has no unfilled slots
+    /// and the `RawCursor` is empty
     #[inline]
-    pub fn is_write_complete(&self) -> bool { self.write_back == self.write_front }
+    pub fn is_write_empty(&self) -> bool { self.write_back == self.write_front }
 
-    /// Returns a reference to the next element if the `RawCursor`
+    /// Returns true if there is an unfilled slot at the front
+    /// of the `RawCursor`
+    pub fn is_write_front_empty(&self) -> bool {
+        self.is_write_empty() || (self.write_front == self.read_front && !self.is_empty())
+    }
+
+    /// Returns true if there is an unfilled slot at the back
+    /// of the `RawCursor`
+    pub fn is_write_back_empty(&self) -> bool {
+        self.is_write_empty() || (self.write_back == self.read_back && !self.is_empty())
+    }
+
+    /// Returns the number of unfilled slots if the `RawCursor` is empty
+    /// if the `RawCursor` is not empty, the behavior is unspecified
+    pub fn write_len(&self) -> usize {
+        if Self::IS_ZS {
+            (self.write_back as usize).wrapping_sub(self.write_front as usize)
+        } else if self.is_write_empty() {
+            0
+        } else {
+            unsafe { self.write_back.offset_from(self.write_front) as usize }
+        }
+    }
+
+    /// Returns the number of unfilled slots at the front
+    /// of the `RawCursor`
+    pub fn write_front_len(&self) -> usize {
+        if self.is_empty() {
+            self.write_len()
+        } else {
+            if Self::IS_ZS {
+                (self.read_front as usize).wrapping_sub(self.write_front as usize)
+            } else if self.is_write_empty() {
+                0
+            } else {
+                unsafe { self.read_front.offset_from(self.write_front) as usize }
+            }
+        }
+    }
+
+    /// Returns the number of unfilled slots at the back
+    /// of the `RawCursor`
+    pub fn write_back_len(&self) -> usize {
+        if self.is_empty() {
+            self.write_len()
+        } else {
+            if Self::IS_ZS {
+                (self.write_back as usize).wrapping_sub(self.read_back as usize)
+            } else if self.is_write_empty() {
+                0
+            } else {
+                unsafe { self.write_back.offset_from(self.read_back) as usize }
+            }
+        }
+    }
+
+    /// Returns a reference to the next element of the `RawCursor`.
     ///
-    /// Note: this does *not* advance the `RawCursor`
+    /// Note: this does *not* advance the `RawCursor` or
+    /// change the number of unfilled slots
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// The `RawCursor` must not be empty
     #[inline]
-    pub unsafe fn front(&mut self) -> &mut T {
+    pub unsafe fn front(&self) -> &T {
+        if Self::IS_ZS {
+            unsafe { &*Self::ZS_PTR }
+        } else {
+            unsafe { &*self.read_front }
+        }
+    }
+
+    /// Returns a mutable reference to the next element of the `RawCursor`.
+    ///
+    /// Note: this does *not* advance the `RawCursor` or
+    /// change the number of unfilled slots
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor` must not be empty
+    #[inline]
+    pub unsafe fn front_mut(&mut self) -> &mut T {
         if Self::IS_ZS {
             unsafe { &mut *Self::ZS_PTR }
         } else {
@@ -200,15 +215,33 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Returns a reference to the last element if the `RawCursor`
+    /// Returns a reference to the last element of the `RawCursor`.
     ///
-    /// Note: this does *not* advance the `RawCursor`
+    /// Note: this does *not* advance the `RawCursor` or
+    /// change the number of unfilled slots
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// The `RawCursor` must not be empty
     #[inline]
-    pub unsafe fn back(&mut self) -> &mut T {
+    pub unsafe fn back(&self) -> &T {
+        if Self::IS_ZS {
+            unsafe { &*Self::ZS_PTR }
+        } else {
+            unsafe { &*self.read_back.sub(1) }
+        }
+    }
+
+    /// Returns a mutable reference to the last element of the `RawCursor`.
+    ///
+    /// Note: this does *not* advance the `RawCursor` or
+    /// change the number of unfilled slots
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor` must not be empty
+    #[inline]
+    pub unsafe fn back_mut(&mut self) -> &mut T {
         if Self::IS_ZS {
             unsafe { &mut *Self::ZS_PTR }
         } else {
@@ -216,15 +249,19 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Removes the next element of the `RawCursor`, and the underlying [`GenericVec`]
-    /// and advances the `RawCursor`
+    /// Removes the next element of the `RawCursor`
+    /// and removes it from the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Creates 1 unfilled slot at the front of the `RawCursor`.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// The `RawCursor` must not be empty
     #[inline]
     pub unsafe fn take_front(&mut self) -> T {
-        debug_assert!(!self.is_complete(), "Cannot take from a complete RawCursor");
+        debug_assert!(!self.is_empty(), "Cannot take from a empty `RawCursor`");
 
         unsafe {
             if Self::IS_ZS {
@@ -238,15 +275,19 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Removes the last element of the `RawCursor`, and the underlying [`GenericVec`]
-    /// and advances the `RawCursor`
+    /// Removes the last element of the `Cursor
+    /// and removes it from the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Creates 1 unfilled slot at the back of the `RawCursor`.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// The `RawCursor` must not be empty
     #[inline]
     pub unsafe fn take_back(&mut self) -> T {
-        debug_assert!(!self.is_complete(), "Cannot take from a complete RawCursor");
+        debug_assert!(!self.is_empty(), "Cannot take from a empty `RawCursor`");
 
         unsafe {
             if Self::IS_ZS {
@@ -259,45 +300,135 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Check if it is safe to write to the front of the `RawCursor`
-    pub fn can_write_front(&self) -> bool { !self.is_write_complete() && self.write_front != self.read_front }
-
-    /// Check if it is safe to write to the back of the `RawCursor`
-    pub fn can_write_back(&self) -> bool { !self.is_write_complete() && self.write_back != self.read_back }
-
-    /// Returns the number of times you can safely call [`RawCursor::write_front`]
-    pub fn write_slots_front(&self) -> usize {
-        if Self::IS_ZS {
-            (self.read_front as usize).wrapping_sub(self.write_front as usize)
-        } else if self.is_write_complete() {
-            0
-        } else {
-            unsafe { self.read_front.offset_from(self.write_front) as usize }
-        }
-    }
-
-    /// Returns the number of times you can safely call [`RawCursor::write_back`]
-    pub fn write_slots_back(&self) -> usize {
-        if Self::IS_ZS {
-            (self.write_back as usize).wrapping_sub(self.read_back as usize)
-        } else if self.is_write_complete() {
-            0
-        } else {
-            unsafe { self.write_back.offset_from(self.read_back) as usize }
-        }
-    }
-
-    /// Skips the next element of the `RawCursor`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Drops the next element of the `RawCursor`
+    /// and removes them it the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Creates 1 unfilled slot at the front of the `RawCursor`.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be write-complete
+    /// The `RawCursor` must not be empty
+    #[inline]
+    pub unsafe fn drop_front(&mut self) {
+        debug_assert!(!self.is_empty(), "Cannot drop an element from a empty `RawCursor`");
+
+        unsafe {
+            if Self::IS_ZS {
+                self.read_front = (self.read_front as usize).wrapping_add(1) as _;
+                Self::ZS_PTR.drop_in_place()
+            } else {
+                let read_front = self.read_front;
+                self.read_front = self.read_front.add(1);
+                read_front.drop_in_place()
+            }
+        }
+    }
+
+    /// Drops the last element of the `RawCursor`
+    /// and removes them it the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Creates 1 unfilled slot at the back of the `RawCursor`.
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor` must not be empty
+    #[inline]
+    pub unsafe fn drop_back(&mut self) {
+        debug_assert!(!self.is_empty(), "Cannot drop an element from a empty `RawCursor`");
+
+        unsafe {
+            if Self::IS_ZS {
+                self.read_back = (self.read_back as usize).wrapping_sub(1) as _;
+                Self::ZS_PTR.drop_in_place();
+            } else {
+                self.read_back = self.read_back.sub(1);
+                self.read_back.drop_in_place()
+            }
+        }
+    }
+
+    /// Drops the next `n` elements of the `RawCursor`
+    /// and removes them from the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by `n` elements
+    ///
+    /// Creates `n` unfilled slots at the front of the `RawCursor`.
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor`'s length must be at least equal to `n`
+    #[inline]
+    pub unsafe fn drop_n_front(&mut self, n: usize) {
+        debug_assert!(
+            self.len() >= n,
+            "Cannot drop {} elements from a `RawCursor` of length {}",
+            n,
+            self.len()
+        );
+
+        unsafe {
+            let ptr = if Self::IS_ZS {
+                self.read_front = (self.read_front as usize).wrapping_add(n) as _;
+                Self::ZS_PTR
+            } else {
+                let read_front = self.read_front;
+                self.read_front = self.read_front.add(n);
+                read_front
+            };
+
+            core::ptr::slice_from_raw_parts_mut(ptr, n).drop_in_place()
+        }
+    }
+
+    /// Drops the last `n` elements of the `RawCursor`
+    /// and removes them from the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by `n` elements
+    ///
+    /// Creates `n` unfilled slots at the back of the `RawCursor`.
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor`'s length must be at least equal to `n`
+    #[inline]
+    pub unsafe fn drop_n_back(&mut self, n: usize) {
+        debug_assert!(
+            self.len() >= n,
+            "Cannot drop {} elements from a `RawCursor` of length {}",
+            n,
+            self.len()
+        );
+
+        unsafe {
+            let ptr = if Self::IS_ZS {
+                self.read_back = (self.read_back as usize).wrapping_sub(n) as _;
+                Self::ZS_PTR
+            } else {
+                self.read_back = self.read_back.sub(n);
+                self.read_back
+            };
+
+            core::ptr::slice_from_raw_parts_mut(ptr, n).drop_in_place()
+        }
+    }
+
+    /// Writes `value` into the unfilled slot at the front of the
+    /// `RawCursor` if there is an unfilled slot at the front of the `RawCursor`
+    ///
+    /// Fills in 1 unfilled slot at the front of the `RawCursor`
+    ///
+    /// # Safety
+    ///
+    /// There must be at least 1 unfilled slot at the front of the `RawCursor`
     #[inline]
     pub unsafe fn write_front(&mut self, value: T) {
         debug_assert!(
-            self.can_write_front(),
-            "Cannot write to a complete `RawCursor` or if there are not empty slots at the front of the `RawCursor`"
+            !self.is_write_front_empty(),
+            "Cannot write to a empty `RawCursor` or if there are not unfilled slots at the front of the `RawCursor`"
         );
 
         unsafe {
@@ -311,17 +442,19 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Skips the next element of the `RawCursor`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Writes `value` into the unfilled slot at the back of the
+    /// `RawCursor` if there is an unfilled slot at the back of the `RawCursor`
+    ///
+    /// Fills in 1 unfilled slot at the back of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be write-complete
+    /// There must be at least 1 unfilled slot at the back of the `RawCursor`
     #[inline]
     pub unsafe fn write_back(&mut self, value: T) {
         debug_assert!(
-            self.can_write_back(),
-            "Cannot write to a complete `RawCursor` or if there are not empty slots at the back of the `RawCursor`"
+            !self.is_write_back_empty(),
+            "Cannot write to a empty `RawCursor` or if there are not unfilled slots at the back of the `RawCursor`"
         );
 
         unsafe {
@@ -335,15 +468,79 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Skips the next element of the `RawCursor`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Moves `slice` into the unfilled slots at the front of the
+    /// `RawCursor` if there are `slice.len()` unfilled slots at the
+    /// front of the `RawCursor`
+    ///
+    /// Fills in `slice.len()` unfilled slots at the front of the `RawCursor`
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// * There must be at least `slice.len()` unfilled slots
+    ///   at the front of the `RawCursor`
+    /// * You must not drop any of the values in `slice`
+    pub unsafe fn write_slice_front(&mut self, slice: &[T]) {
+        unsafe {
+            let write_front_len = self.write_front_len();
+            debug_assert!(
+                write_front_len >= slice.len(),
+                "Cannot write {} elements, only {} slots remaining",
+                slice.len(),
+                write_front_len
+            );
+
+            if Self::IS_ZS {
+                self.write_front = (self.write_front as usize).wrapping_add(slice.len()) as _;
+            } else {
+                self.write_front.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+                self.write_front = self.write_front.add(slice.len());
+            }
+        }
+    }
+
+    /// Moves `slice` into the unfilled slots at the back of the
+    /// `RawCursor` if there are `slice.len()` unfilled slots at the
+    /// back of the `RawCursor`
+    ///
+    /// Fills in `slice.len()` unfilled slots at the back of the `RawCursor`
+    ///
+    /// # Safety
+    ///
+    /// * There must be at least `slice.len()` unfilled slots
+    ///   at the back of the `RawCursor`
+    /// * You must not drop any of the values in `slice`
+    pub unsafe fn write_slice_back(&mut self, slice: &[T]) {
+        let write_back_len = self.write_back_len();
+        debug_assert!(
+            write_back_len >= slice.len(),
+            "Cannot write {} elements, only {} slots remaining",
+            slice.len(),
+            write_back_len
+        );
+
+        unsafe {
+            if Self::IS_ZS {
+                self.write_back = (self.write_back as usize).wrapping_sub(slice.len()) as _;
+            } else {
+                self.write_back = self.write_back.sub(slice.len());
+                self.write_back.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
+            }
+        }
+    }
+
+    /// Skips the next element of the `RawCursor`
+    /// and keeps it in the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Does not change the number of unfilled slots.
+    ///
+    /// # Safety
+    ///
+    /// The `RawCursor` must not be empty
     #[inline]
     pub unsafe fn skip_front(&mut self) {
-        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawCursor");
+        debug_assert!(!self.is_empty(), "Cannot skip elements from a empty `RawCursor`");
 
         unsafe {
             if Self::IS_ZS {
@@ -358,15 +555,19 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Skips the last element of the `RawCursor`, and keeps the element in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Skips the last element of the `RawCursor`
+    /// and keeps it in the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by 1 element
+    ///
+    /// Does not change the number of unfilled slots.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` must not be complete
+    /// The `RawCursor` must not be empty
     #[inline]
     pub unsafe fn skip_back(&mut self) {
-        debug_assert!(!self.is_complete(), "Cannot skip from a complete RawCursor");
+        debug_assert!(!self.is_empty(), "Cannot skip elements from a empty `RawCursor`");
 
         unsafe {
             if Self::IS_ZS {
@@ -381,15 +582,24 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Skips the next `n` elements of the `RawCursor`, and keeps them in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Skips the next `n` elements of the `RawCursor`
+    /// and keeps them in the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by `n` elements
+    ///
+    /// Does not change the number of unfilled slots.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` have at least n remaining elements
+    /// The `RawCursor`'s length must be at least equal to `n`
     #[inline]
     pub unsafe fn skip_n_front(&mut self, n: usize) {
-        debug_assert!(self.remaining() >= n);
+        debug_assert!(
+            self.len() >= n,
+            "Cannot skip {} elements from a `RawCursor` of length {}",
+            n,
+            self.len()
+        );
 
         unsafe {
             if Self::IS_ZS {
@@ -405,15 +615,24 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    /// Skips the last `n` elements of the `RawCursor`, and keeps them in the
-    /// underlying [`GenericVec`] and advances the `RawCursor`
+    /// Skips the last `n` elements of the `RawCursor`
+    /// and keeps them in the underlying [`GenericVec`]
+    ///
+    /// Advances the `RawCursor` by `n` elements
+    ///
+    /// Does not change the number of unfilled slots.
     ///
     /// # Safety
     ///
-    /// The `RawCursor` have at least n remaining elements
+    /// The `RawCursor`'s length must be at least equal to `n`
     #[inline]
     pub unsafe fn skip_n_back(&mut self, n: usize) {
-        debug_assert!(self.remaining() >= n);
+        debug_assert!(
+            self.len() >= n,
+            "Cannot skip {} elements from a `RawCursor` of length {}",
+            n,
+            self.len()
+        );
 
         unsafe {
             if Self::IS_ZS {
@@ -429,91 +648,15 @@ impl<'a, T, S: ?Sized + Storage<T>> RawCursor<'a, T, S> {
         }
     }
 
-    // TODO: this doc is bad, improve it
-    /// Write the value into empty space at the front of the `RawCursor`
+    /// Reserve at least space unfilled slots in the `RawCursor`
     ///
-    /// # Safety
+    /// # Panic
     ///
-    /// The `RawCursor` must have taken at least 1 more element than it has
-    /// written from the front
-    pub unsafe fn consume_write_front(&mut self, value: T) {
-        if Self::IS_ZS {
-            core::mem::forget(value);
-            self.write_front = (self.write_front as usize).wrapping_add(1) as _;
-        } else {
-            unsafe {
-                self.write_front.write(value);
-                self.write_front = self.write_front.add(1);
-            }
-        }
-    }
-
-    // TODO: this doc is bad, improve it
-    /// Write the value into empty space at the back of the `RawCursor`
-    ///
-    /// # Safety
-    ///
-    /// The `RawCursor` must have taken at least 1 more element than it has
-    /// written from the back
-    pub unsafe fn consume_write_back(&mut self, value: T) {
-        if Self::IS_ZS {
-            core::mem::forget(value);
-            self.write_back = (self.write_back as usize).wrapping_sub(1) as _;
-        } else {
-            unsafe {
-                self.write_back = self.write_back.sub(1);
-                self.write_back.write(value);
-            }
-        }
-    }
-
-    // TODO: this doc is bad, improve it
-    /// Write the slice into empty space at the front of the `RawCursor`
-    ///
-    /// # Safety
-    ///
-    /// The `RawCursor` must have taken at least `slice.len()` more element than it has
-    /// written from the front
-    pub unsafe fn consume_write_slice_front(&mut self, slice: &[T]) {
-        unsafe {
-            if Self::IS_ZS {
-                self.write_front = (self.write_front as usize).wrapping_add(slice.len()) as _;
-            } else {
-                self.write_front.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
-                self.write_front = self.write_front.add(slice.len());
-            }
-        }
-    }
-
-    // TODO: this doc is bad, improve it
-    /// Write the slice into empty space at the back of the `RawCursor`
-    ///
-    /// # Safety
-    ///
-    /// The `RawCursor` must have taken at least `slice.len()` more element than it has
-    /// written from the back
-    pub unsafe fn consume_write_slice_back(&mut self, slice: &[T]) {
-        unsafe {
-            if Self::IS_ZS {
-                self.write_back = (self.write_back as usize).wrapping_sub(slice.len()) as _;
-            } else {
-                self.write_back = self.write_back.sub(slice.len());
-                self.write_back.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
-            }
-        }
-    }
-
-    /// Assert that there is at least `space` elements of room left to write into
-    /// the `RawCursor`, and the underlying [`GenericVec`]
-    ///
-    /// # Safety
-    ///
-    /// the `RawCursor` must be complete
-    pub unsafe fn assert_space(&mut self, space: usize) {
-        debug_assert!(
-            self.is_complete(),
-            "You can only call `assert_space` on a complete `RawCursor`, this is UB in release mode!"
-        );
+    /// * Panics if the `RawCursor` is not empty
+    /// * May panic if the underlying [`GenericVec`] cannot
+    ///   reserve more space
+    pub fn reserve(&mut self, space: usize) {
+        assert!(self.is_empty(), "You can only call `reserve` on a empty `RawCursor`");
         unsafe {
             if Self::IS_ZS {
                 let write_space = (self.write_back as usize).wrapping_sub(self.write_front as usize);

@@ -1,4 +1,4 @@
-use crate::{RawCursor, Storage};
+use crate::{iter::RawCursor, Storage};
 
 use core::iter::FusedIterator;
 
@@ -44,12 +44,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.raw.is_complete() {
+            if self.raw.is_empty() {
                 break None
             }
 
             unsafe {
-                let value = self.raw.front();
+                let value = self.raw.front_mut();
                 if (self.filter)(value) {
                     break Some(self.raw.take_front())
                 } else {
@@ -60,7 +60,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.raw.remaining();
+        let len = self.raw.len();
         (0, Some(len))
     }
 }
@@ -72,12 +72,12 @@ where
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
-            if self.raw.is_complete() {
+            if self.raw.is_empty() {
                 break None
             }
 
             unsafe {
-                let value = self.raw.back();
+                let value = self.raw.back_mut();
                 if (self.filter)(value) {
                     break Some(self.raw.take_back())
                 } else {
