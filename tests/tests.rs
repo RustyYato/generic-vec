@@ -65,12 +65,12 @@ macro_rules! make_tests_files {
         make_tests_files! { copy_only }
         imp_make_tests_files! {
             #[cfg(feature = "alloc")]
-            mod owned { simple, into_iter, drain, splice, vec_ops }
+            mod owned { simple, into_iter, cursor, drain, splice, vec_ops }
         }
     };
     (copy_only) => {
         imp_make_tests_files! {
-            mod copy { simple, into_iter, drain, splice, vec_ops }
+            mod copy { simple, into_iter, cursor, drain, splice, vec_ops }
         }
     };
 }

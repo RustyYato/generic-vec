@@ -291,7 +291,7 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
             "Cannot write to a empty `Cursor` or if there are not unfilled slots at the back of the `Cursor`"
         );
 
-        unsafe { self.write_back(value) }
+        unsafe { self.raw.write_back(value) }
     }
 
     /// Copies `slice` into the unfilled slots at the front of the
@@ -357,7 +357,7 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
     #[inline]
     pub fn skip_front(&mut self) {
         assert!(!self.is_empty(), "Cannot skip elements from a empty `Cursor`");
-        unsafe { self.skip_front() }
+        unsafe { self.raw.skip_front() }
     }
 
     /// Skips the last element of the `Cursor`
@@ -373,7 +373,7 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
     #[inline]
     pub fn skip_back(&mut self) {
         assert!(!self.is_empty(), "Cannot skip elements from a empty `Cursor`");
-        unsafe { self.skip_back() }
+        unsafe { self.raw.skip_back() }
     }
 
     /// Skips the next `n` elements of the `Cursor`
@@ -395,7 +395,7 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
             self.len()
         );
 
-        unsafe { self.skip_n_front(n) }
+        unsafe { self.raw.skip_n_front(n) }
     }
 
     /// Skips the last `n` elements of the `Cursor`
@@ -417,7 +417,7 @@ impl<'a, T, S: ?Sized + Storage<T>> Cursor<'a, T, S> {
             self.len()
         );
 
-        unsafe { self.skip_n_back(n) }
+        unsafe { self.raw.skip_n_back(n) }
     }
 
     /// Reserve at least space unfilled slots in the `Cursor`
