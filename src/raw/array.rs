@@ -1,13 +1,13 @@
 use crate::raw::{AllocError, Storage, StorageWithCapacity};
 
 unsafe impl<T: Copy, const N: usize> crate::raw::StorageInit<T> for [T; N] {}
-impl<T: Default + Copy, const N: usize> StorageWithCapacity<T> for [T; N]
+unsafe impl<T: Default + Copy, const N: usize> StorageWithCapacity<T> for [T; N]
 where
     Self: Default,
 {
     fn with_capacity(capacity: usize) -> Self {
         if capacity > N {
-            crate::raw::fixed_capacity_reserve_error(N, capacity)
+            crate::raw::capacity::fixed_capacity_reserve_error(N, capacity)
         }
 
         Self::default()
@@ -37,7 +37,7 @@ unsafe impl<T: Copy, const N: usize> Storage<T> for [T; N] {
 
     fn reserve(&mut self, capacity: usize) {
         if capacity > N {
-            crate::raw::fixed_capacity_reserve_error(N, capacity)
+            crate::raw::capacity::fixed_capacity_reserve_error(N, capacity)
         }
     }
 

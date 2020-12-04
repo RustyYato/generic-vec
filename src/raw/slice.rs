@@ -1,4 +1,7 @@
-use crate::raw::{AllocError, Storage};
+use crate::raw::{
+    capacity::{capacity, fixed_capacity_reserve_error, Round},
+    AllocError, Storage,
+};
 
 use core::mem::{align_of, size_of, MaybeUninit};
 
@@ -40,16 +43,16 @@ impl<T> UninitSlice<T> {
 unsafe impl<T, U> Storage<U> for UninitSlice<T> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
-    fn capacity(&self) -> usize { crate::raw::capacity(self.0.len(), size_of::<T>(), size_of::<U>()) }
+    fn capacity(&self) -> usize { capacity(self.0.len(), size_of::<T>(), size_of::<U>(), Round::Down) }
 
     fn as_ptr(&self) -> *const U { self.0.as_ptr().cast() }
 
     fn as_mut_ptr(&mut self) -> *mut U { self.0.as_mut_ptr().cast() }
 
     fn reserve(&mut self, new_capacity: usize) {
-        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if new_capacity > self.0.len() {
-            crate::raw::fixed_capacity_reserve_error(self.0.len(), new_capacity)
+            fixed_capacity_reserve_error(self.0.len(), new_capacity)
         }
     }
 
@@ -74,7 +77,7 @@ unsafe impl<T: Copy> Storage<T> for [T] {
 
     fn reserve(&mut self, capacity: usize) {
         if capacity > self.len() {
-            crate::raw::fixed_capacity_reserve_error(self.len(), capacity)
+            fixed_capacity_reserve_error(self.len(), capacity)
         }
     }
 

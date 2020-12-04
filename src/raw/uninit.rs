@@ -84,11 +84,11 @@ impl<T, A> Clone for UninitBuffer<T, A> {
     fn clone(&self) -> Self { Self::default() }
 }
 
-impl<U, T, A> StorageWithCapacity<U> for UninitBuffer<T, A> {
+unsafe impl<U, T, A> StorageWithCapacity<U> for UninitBuffer<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         let max_capacity = size::<U, T, A>();
         if capacity > max_capacity {
-            crate::raw::fixed_capacity_reserve_error(max_capacity, capacity)
+            crate::raw::capacity::fixed_capacity_reserve_error(max_capacity, capacity)
         }
 
         Self::default()
@@ -119,7 +119,7 @@ unsafe impl<U, T, A> Storage<U> for UninitBuffer<T, A> {
     fn reserve(&mut self, new_capacity: usize) {
         let capacity = size::<U, T, A>();
         if new_capacity > capacity {
-            crate::raw::fixed_capacity_reserve_error(capacity, new_capacity)
+            crate::raw::capacity::fixed_capacity_reserve_error(capacity, new_capacity)
         }
     }
 

@@ -1,4 +1,7 @@
-use crate::raw::{AllocError, Storage, StorageWithCapacity};
+use crate::raw::{
+    capacity::{capacity, Round},
+    AllocError, Storage, StorageWithCapacity,
+};
 
 use core::{
     alloc::Layout,
@@ -116,21 +119,21 @@ impl<T, A: AllocRef + Default> Default for Heap<T, A> {
 unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
-    fn capacity(&self) -> usize { crate::raw::capacity(self.capacity, size_of::<T>(), size_of::<U>()) }
+    fn capacity(&self) -> usize { capacity(self.capacity, size_of::<T>(), size_of::<U>(), Round::Down) }
 
     fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }
 
     fn as_mut_ptr(&mut self) -> *mut U { self.ptr.as_ptr().cast() }
 
     fn reserve(&mut self, new_capacity: usize) {
-        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             let _ = self.reserve_slow(new_capacity, OnFailure::Abort);
         }
     }
 
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> {
-        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             self.reserve_slow(new_capacity, OnFailure::Error)
         } else {
@@ -163,8 +166,10 @@ impl<T, A: Default + AllocRef> Heap<T, A> {
     }
 }
 
-impl<T, U, A: Default + AllocRef> StorageWithCapacity<U> for Heap<T, A> {
-    fn with_capacity(capacity: usize) -> Self { Self::with_capacity(capacity) }
+unsafe impl<T, U, A: Default + AllocRef> StorageWithCapacity<U> for Heap<T, A> {
+    fn with_capacity(cap: usize) -> Self {
+        Self::with_capacity(capacity(cap, size_of::<U>(), size_of::<T>(), Round::Up))
+    }
 }
 
 impl<T, A: ?Sized + AllocRef> Heap<T, A> {

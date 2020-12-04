@@ -20,6 +20,8 @@ mod slice;
 mod uninit;
 mod zero_sized;
 
+mod capacity;
+
 #[cfg(any(doc, feature = "alloc"))]
 pub use heap::Heap;
 
@@ -27,71 +29,8 @@ pub use slice::UninitSlice;
 pub use uninit::UninitBuffer;
 pub use zero_sized::ZeroSized;
 
-#[cold]
-#[inline(never)]
-#[cfg(feature = "nightly")]
-const fn capacity_calculation_overflow() -> ! { panic!("Tried to calculate the current capacity, but overflowed") }
-
-#[cold]
-#[inline(never)]
-fn fixed_capacity_reserve_error(capacity: usize, new_capacity: usize) -> ! {
-    panic!(
-        "Tried to reserve {}, but used a fixed capacity storage of {}",
-        new_capacity, capacity
-    )
-}
-
-#[cfg(not(any(
-    target_pointer_width = "8",
-    target_pointer_width = "16",
-    target_pointer_width = "32",
-    target_pointer_width = "64"
-)))]
-compile_error!("Cannot correctly calculate capacity on an 128-bit or larger architecture");
-
-const fn capacity(old_capacity: usize, size_self: usize, size_other: usize) -> usize {
-    #[cfg(target_pointer_width = "8")]
-    type PointerNext = u16;
-    #[cfg(target_pointer_width = "16")]
-    type PointerNext = u32;
-    #[cfg(target_pointer_width = "32")]
-    type PointerNext = u64;
-    #[cfg(target_pointer_width = "64")]
-    type PointerNext = u128;
-
-    let size = (old_capacity as PointerNext) * (size_self as PointerNext) / (size_other as PointerNext);
-
-    #[cfg(not(feature = "nightly"))]
-    {
-        [size as usize][(size > usize::MAX as PointerNext) as usize]
-    }
-
-    #[cfg(feature = "nightly")]
-    {
-        if size > usize::MAX as PointerNext {
-            capacity_calculation_overflow()
-        }
-
-        size as usize
-    }
-}
-
 /// A [`Storage`] that can only contain initialized `Storage::Item`
 pub unsafe trait StorageInit<T>: Storage<T> {}
-
-/// Check if type `U` smaller than `T` and less aligned than `T`
-pub const fn is_compatible<T, U>() -> bool {
-    use core::mem::{align_of, size_of};
-
-    size_of::<T>() >= size_of::<U>() && align_of::<T>() >= align_of::<U>()
-}
-
-/// Check if type `U` is layout identical to `T`
-pub const fn is_identical<T, U>() -> bool {
-    use core::mem::{align_of, size_of};
-
-    size_of::<T>() == size_of::<U>() && align_of::<T>() == align_of::<U>()
-}
 
 /// A type that can hold `T`s, and potentially
 /// reserve space for more `Self::Items`s
@@ -143,7 +82,12 @@ pub unsafe trait Storage<T> {
 }
 
 /// A storage that can be initially created with a given capacity
-pub trait StorageWithCapacity<T>: Storage<T> + Default {
+///
+/// # Safety
+///
+/// The storage must have a capacity of at least `capacity` after
+/// `StorageWithCapacity::with_capacity` is called.
+pub unsafe trait StorageWithCapacity<T>: Storage<T> + Default {
     /// Creates a new storage with at least the given storage capacity
     fn with_capacity(capacity: usize) -> Self;
 
@@ -193,7 +137,7 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
 }
 
 #[cfg(feature = "alloc")]
-impl<T, S: ?Sized + StorageWithCapacity<T>> StorageWithCapacity<T> for Box<S> {
+unsafe impl<T, S: ?Sized + StorageWithCapacity<T>> StorageWithCapacity<T> for Box<S> {
     fn with_capacity(capacity: usize) -> Self { Box::new(S::with_capacity(capacity)) }
 
     #[doc(hidden)]

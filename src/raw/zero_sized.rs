@@ -59,7 +59,7 @@ unsafe impl<T> Storage<T> for ZeroSized<T> {
     fn capacity(&self) -> usize { usize::MAX }
 }
 
-impl<T> StorageWithCapacity<T> for ZeroSized<T> {
+unsafe impl<T> StorageWithCapacity<T> for ZeroSized<T> {
     #[inline]
     fn with_capacity(_: usize) -> Self { Self::NEW }
 }

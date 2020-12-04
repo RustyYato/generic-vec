@@ -1,4 +1,7 @@
-use crate::raw::{AllocError, Storage, StorageWithCapacity};
+use crate::raw::{
+    capacity::{capacity, Round},
+    AllocError, Storage, StorageWithCapacity,
+};
 
 use core::{
     alloc::Layout,
@@ -67,21 +70,21 @@ impl<T> Default for Heap<T> {
 unsafe impl<T, U> Storage<U> for Heap<T> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
-    fn capacity(&self) -> usize { self.capacity }
+    fn capacity(&self) -> usize { capacity(self.capacity, size_of::<T>(), size_of::<U>(), Round::Down) }
 
     fn as_ptr(&self) -> *const U { self.ptr.as_ptr().cast() }
 
     fn as_mut_ptr(&mut self) -> *mut U { self.ptr.as_ptr().cast() }
 
     fn reserve(&mut self, new_capacity: usize) {
-        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             let _ = self.reserve_slow(new_capacity, OnFailure::Abort);
         }
     }
 
     fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> {
-        let new_capacity = crate::raw::capacity(new_capacity, size_of::<U>(), size_of::<T>());
+        let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             self.reserve_slow(new_capacity, OnFailure::Error)
         } else {
@@ -151,8 +154,10 @@ impl<T> Heap<T> {
     }
 }
 
-impl<T, U> StorageWithCapacity<U> for Heap<T> {
-    fn with_capacity(capacity: usize) -> Self { Self::with_capacity(capacity) }
+unsafe impl<T, U> StorageWithCapacity<U> for Heap<T> {
+    fn with_capacity(cap: usize) -> Self {
+        Self::with_capacity(capacity(cap, size_of::<U>(), size_of::<T>(), Round::Up))
+    }
 }
 
 impl<T> Heap<T> {
