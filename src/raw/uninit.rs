@@ -1,3 +1,6 @@
+//! `UninitBuffer` represents some uninitialized memory
+//!
+
 use core::mem::{align_of, size_of, MaybeUninit};
 
 use super::{AllocError, Storage, StorageWithCapacity};
@@ -8,10 +11,29 @@ struct AlignedBuffer<T, A> {
     value: T,
 }
 
-/// An uninitialized storage
+/// An uninitialized storage. This storage can store values
+/// of any type that has an alignment smaller of equal to `T` or `A`.
 ///
-/// This type is represented as, generally the second type parameter can only
-/// be used to align the storage
+/// `UninitBuffer` has a max capacity of
+/// `round_up(size_of::<T>(), align_::<A>()) / size_of::<Element>()`
+/// elements.
+///
+/// i.e. `UninitBuffer<[i32; 12]>` can store 12 `i32`s, but
+/// `UninitBuffer<[i32; 1], u64>` can store 2 `i32`s. Because `u64 is
+/// aligned to 8 bytes, so `round_up(4 bytes, 8 bytes) / 4 bytes == 2`
+///
+/// You can query the capacity with [`UninitBuffer::capacity`]
+///
+/// ```rust
+/// # use generic_vec::raw::UninitBuffer;
+/// assert_eq!(UninitBuffer::<[i32; 12]>::capacity::<i32>(), 12);
+/// assert_eq!(UninitBuffer::<[i32; 1], u64>::capacity::<i32>(), 2);
+/// assert_eq!(UninitBuffer::<[i32; 1]>::capacity::<u64>(), 0);
+/// ```
+///
+/// ## In memory representation
+///
+/// This type is represented in memory as
 ///
 /// ```
 /// #[repr(C)]
@@ -21,12 +43,10 @@ struct AlignedBuffer<T, A> {
 /// }
 /// ```
 ///
-/// By default the alignment type is set to `u8`, so that it doesn't get in the way.
-/// But if you need a higher alignment, then you can change the second type.
-/// This allows you to do things like `UninitBuffer<[u8; 4], u32>` to get a
-/// 4 byte aligned buffer of 4 bytes or `UninitBuffer<[CustomType; 12], usize>` to
-/// get an array of `CustomType`, and guarantee it is pointer-aligned.
-#[repr(C)]
+/// The size of the buffer is determined by type paramter `T`, and
+/// the alignment is the maximum alignment of `T` and `A`. This means
+/// that `A` should be used to ensure a certain alignment.
+#[repr(transparent)]
 pub struct UninitBuffer<T, A = u8>(MaybeUninit<AlignedBuffer<T, A>>);
 
 unsafe impl<T, A> Send for UninitBuffer<T, A> {}
@@ -41,6 +61,9 @@ const fn size<U, T, A>() -> usize {
 }
 
 impl<T, A> UninitBuffer<T, A> {
+    /// Get the capacity of this buffer for a given element type
+    pub const fn capacity<U>() -> usize { size::<U, T, A>() }
+
     /// Create a new uninitialized array storage
     pub const fn uninit() -> Self { Self(MaybeUninit::uninit()) }
 

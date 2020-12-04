@@ -160,12 +160,14 @@ use core::{
 mod extension;
 mod impls;
 mod slice;
-// mod set_len;
 
 pub mod iter;
 pub mod raw;
 
 use raw::Storage;
+
+#[doc(hidden)]
+pub use core;
 
 /// A heap backed vector with a growable capacity
 #[cfg(any(doc, feature = "alloc"))]
@@ -181,7 +183,7 @@ pub type HeapVec<T> = GenericVec<T, raw::Heap<T>>;
 #[cfg(any(doc, feature = "nightly"))]
 pub type ArrayVec<T, const N: usize> = TypeVec<T, [T; N]>;
 /// An slice backed vector backed by potentially uninitialized memory
-pub type SliceVec<'a, T> = GenericVec<T, raw::UninitSlice<'a, T>>;
+pub type SliceVec<'a, T> = GenericVec<T, &'a mut raw::UninitSlice<T>>;
 
 /// An array backed vector backed by initialized memory
 #[cfg(any(doc, feature = "nightly"))]
@@ -284,6 +286,37 @@ macro_rules! uninit_array {
         // so it's fine to cast uninitialized memory to `[MaybeUninit; N]`
         unsafe { $crate::macros::MaybeUninit::<[$crate::macros::MaybeUninit<_>; $n]>::uninit().assume_init() }
     };
+}
+
+/// Save the changes to [`GenericVec::spare_capacity_mut`]
+///
+/// $orig - a mutable reference to a [`GenericVec`]
+/// $spare - the [`SliceVec`] that was obtained from [`$orig.spare_capacity_mut()`]
+///
+/// # Safety
+///
+/// `$spare` should be the [`SliceVec`] returned by `$orig.spare_capacity_mut()`
+#[macro_export]
+macro_rules! save_spare {
+    ($spare:expr, $orig:expr) => {{
+        let spare: $crate::SliceVec<_> = $spare;
+        let spare = $crate::core::mem::ManuallyDrop::new(spare);
+        let len = spare.len();
+        let ptr = spare.as_ptr();
+        let orig: &mut $crate::GenericVec<_, _> = $orig;
+        $crate::validate_spare(ptr, orig);
+        let len = len + orig.len();
+        $orig.set_len_unchecked(len);
+    }};
+}
+
+#[doc(hidden)]
+pub fn validate_spare<T>(spare_ptr: *const T, orig: &[T]) {
+    debug_assert!(
+        unsafe { orig.as_ptr().add(orig.len()) == spare_ptr },
+        "Tried to use `save_spare!` with a `SliceVec` that was not obtained from `GenricVec::spare_capacity_mut`. \
+         This is undefined behavior on release mode!"
+    )
 }
 
 /// A vector type that can be backed up by a variety of different backends
@@ -452,13 +485,13 @@ impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
 #[cfg(not(feature = "nightly"))]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
-    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::new(slice)) }
+    pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::from_mut(slice)) }
 }
 
 #[cfg(feature = "nightly")]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
-    pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::new(slice)) }
+    pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::from_mut(slice)) }
 }
 
 impl<'a, T: Copy> InitSliceVec<'a, T> {
@@ -587,10 +620,28 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     pub unsafe fn storage_mut(&mut self) -> &mut S { &mut self.storage }
 
     /// Returns the remaining spare capacity of the vector as
-    /// a `SliceVec<'_, T>`.
+    /// a [`SliceVec<'_, T>`](SliceVec).
     ///
-    /// Keep in mind that the `SliceVec<'_, T>` will drop all elements
-    /// that you push into it!
+    /// Keep in mind that the [`SliceVec<'_, T>`](SliceVec) will drop all elements
+    /// that you push into it when it goes out of scope! If you want
+    /// these modifications to persist then you should use [`save_spare`]
+    /// to persist these writes.
+    ///
+    /// ```
+    /// let mut vec = generic_vec::TypeVec::<i32, [i32; 16]>::new();
+    ///
+    /// let mut spare = vec.spare_capacity_mut();
+    /// spare.push(0);
+    /// spare.push(2);
+    /// drop(spare);
+    /// assert_eq!(vec, []);
+    ///
+    /// let mut spare = vec.spare_capacity_mut();
+    /// spare.push(0);
+    /// spare.push(2);
+    /// unsafe { generic_vec::save_spare!(spare, &mut vec) }
+    /// assert_eq!(vec, [0, 2]);
+    /// ```
     pub fn spare_capacity_mut(&mut self) -> SliceVec<'_, T> {
         // Safety
         //
@@ -725,9 +776,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
         }
 
         unsafe {
-            let writer = core::mem::ManuallyDrop::new(writer);
-            let len = writer.len() + self.len();
-            self.set_len_unchecked(len);
+            save_spare!(writer, self);
         }
     }
 
@@ -1601,7 +1650,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// When the iterator is dropped, all elements in the range are removed from
     /// the vector, even if the iterator was not fully consumed. If the iterator
-    /// is not dropped (with mem::forget for example), it is unspecified how many
+    /// is not dropped (with `mem::forget` for example), it is unspecified how many
     /// elements are removed.
     ///
     /// # Panic

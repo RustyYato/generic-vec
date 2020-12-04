@@ -4,25 +4,22 @@ use core::mem::{align_of, size_of, MaybeUninit};
 
 /// An uninitialized slice storage
 #[repr(transparent)]
-pub struct UninitSlice<'a, T>(&'a mut [MaybeUninit<T>]);
+pub struct UninitSlice<T>([MaybeUninit<T>]);
 
-unsafe impl<T> Send for UninitSlice<'_, T> {}
-unsafe impl<T> Sync for UninitSlice<'_, T> {}
+unsafe impl<T> Send for UninitSlice<T> {}
+unsafe impl<T> Sync for UninitSlice<T> {}
 
 #[cfg(not(feature = "nightly"))]
-impl<'a, T> UninitSlice<'a, T> {
+impl<T> UninitSlice<T> {
     /// Create a new `UninitSlice` storage
-    pub fn new(buffer: &'a mut [MaybeUninit<T>]) -> Self { Self(buffer) }
-
-    /// Reborrow an `UninitSlice` storage
-    pub fn as_ref(&mut self) -> UninitSlice<'_, T> { UninitSlice(self.0) }
+    pub fn from_mut(buffer: &mut [MaybeUninit<T>]) -> &mut Self { unsafe { &mut *(buffer as *mut [_] as *mut Self) } }
 
     /// Get the backing value of the this `Uninit` storage
     ///
     /// # Safety
     ///
     /// You may not write uninitialized memory to this slice
-    pub unsafe fn into_inner(self) -> &'a mut [MaybeUninit<T>] { self.0 }
+    pub unsafe fn into_mut(&mut self) -> &mut [MaybeUninit<T>] { unsafe { &mut *(self as *mut Self as *mut [_]) } }
 }
 
 #[cfg(feature = "nightly")]
@@ -41,7 +38,7 @@ impl<'a, T> UninitSlice<'a, T> {
     pub const unsafe fn into_inner(self) -> &'a mut [MaybeUninit<T>] { self.0 }
 }
 
-unsafe impl<T, U> Storage<U> for UninitSlice<'_, T> {
+unsafe impl<T, U> Storage<U> for UninitSlice<T> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
     fn capacity(&self) -> usize { crate::raw::capacity(self.0.len(), size_of::<T>(), size_of::<U>()) }
