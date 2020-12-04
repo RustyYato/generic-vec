@@ -144,7 +144,6 @@
 //! a new [`ArrayVec`] without passing in an existing buffer.
 //!
 //! ```rust
-//! # #![cfg_attr(not(feature = "nightly"), ignore)]
 //! use generic_vec::ArrayVec;
 //!
 //! let mut array_vec = ArrayVec::<i32, 16>::new();
