@@ -14,8 +14,8 @@ impl<'a, T, S: ?Sized + Storage<T>> Drain<'a, T, S> {
 
 impl<T, S: ?Sized + Storage<T>> FusedIterator for Drain<'_, T, S> {}
 
-#[cfg(feature = "nightly")]
 impl<T, S: ?Sized + Storage<T>> ExactSizeIterator for Drain<'_, T, S> {
+    #[cfg(feature = "nightly")]
     fn is_empty(&self) -> bool { self.raw.is_empty() }
 }
 

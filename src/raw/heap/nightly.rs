@@ -10,7 +10,6 @@ use core::{
 };
 use std::alloc::handle_alloc_error;
 
-#[cfg(feature = "nightly")]
 use std::alloc::{AllocRef, Global};
 
 doc_heap! {

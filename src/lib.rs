@@ -209,24 +209,24 @@ use raw::Storage;
 pub use core;
 
 /// A heap backed vector with a growable capacity
-#[cfg(all(feature = "alloc", feature = "nightly"))]
+#[cfg(any(doc, all(feature = "alloc", feature = "nightly")))]
 #[cfg_attr(doc, doc(cfg(all(feature = "alloc", feature = "nightly"))))]
 pub type HeapVec<T, A = std::alloc::Global> = GenericVec<T, raw::Heap<T, A>>;
 
 /// A heap backed vector with a growable capacity
-#[cfg(all(feature = "alloc", not(feature = "nightly")))]
+#[cfg(all(not(doc), feature = "alloc", not(feature = "nightly")))]
 #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
 pub type HeapVec<T> = GenericVec<T, raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 #[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 pub type ArrayVec<T, const N: usize> = TypeVec<T, [T; N]>;
 /// An slice backed vector backed by potentially uninitialized memory
 pub type SliceVec<'a, T> = GenericVec<T, &'a mut raw::UninitSlice<T>>;
 
 /// An array backed vector backed by initialized memory
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 #[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 pub type InitArrayVec<T, const N: usize> = GenericVec<T, [T; N]>;
 /// An slice backed vector backed by initialized memory
@@ -492,7 +492,7 @@ impl<T, B, A> TypeVec<T, B, A> {
     }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 #[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 impl<T, const N: usize> ArrayVec<T, N> {
     /// Create a new full `ArrayVec`
@@ -542,20 +542,20 @@ impl<T> HeapVec<T> {
     }
 }
 
-#[cfg(all(feature = "nightly", feature = "alloc"))]
+#[cfg(any(doc, all(feature = "nightly", feature = "alloc")))]
 #[cfg_attr(doc, doc(cfg(all(feature = "nightly", feature = "alloc"))))]
 impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
     /// Create a new empty `HeapVec` with the given allocator
     pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
 }
 
-#[cfg(not(feature = "nightly"))]
+#[cfg(any(doc, not(feature = "nightly")))]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
     pub fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::from_mut(slice)) }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
     ///
@@ -563,7 +563,7 @@ impl<'a, T> SliceVec<'a, T> {
     pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::from_mut(slice)) }
 }
 
-#[cfg(not(feature = "nightly"))]
+#[cfg(any(doc, not(feature = "nightly")))]
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     /// Create a new full `InitSliceVec`
     pub fn new(storage: &'a mut [T]) -> Self {
@@ -986,7 +986,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// # Panic
     ///
     /// May panic or reallocate if the collection has less than N elements remaining
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn push_array<const N: usize>(&mut self, value: [T; N]) -> &mut [T; N] {
         self.reserve(N);
 
@@ -1032,7 +1032,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// * May panic or reallocate if the collection has less than N elements remaining
     /// * Panics if index > len.
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn insert_array<const N: usize>(&mut self, index: usize, value: [T; N]) -> &mut [T; N] {
         #[cold]
         #[inline(never)]
@@ -1083,7 +1083,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// # Panics
     ///
     /// Panics if the collection contains less than `N` elements in it
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn pop_array<const N: usize>(&mut self) -> [T; N] {
         #[cold]
         #[inline(never)]
@@ -1130,7 +1130,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds or if `index + N > len()`
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn remove_array<const N: usize>(&mut self, index: usize) -> [T; N] {
         #[cold]
         #[inline(never)]
@@ -1199,7 +1199,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// to hold `N` elements.
     ///
     /// Guaranteed to not panic/abort/allocate
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn try_push_array<const N: usize>(&mut self, value: [T; N]) -> Result<&mut [T; N], [T; N]> {
         if self.remaining_capacity() < N {
             Err(value)
@@ -1234,7 +1234,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// to hold `N` elements or index is out of bounds
     ///
     /// Guaranteed to not panic/abort/allocate
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn try_insert_array<const N: usize>(&mut self, index: usize, value: [T; N]) -> Result<&mut [T; N], [T; N]> {
         if self.capacity().wrapping_sub(self.len()) < N || index > self.len() {
             Err(value)
@@ -1266,7 +1266,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Returns `None` if the collection is has less than N elements
     ///
     /// Guaranteed to not panic/abort/allocate
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn try_pop_array<const N: usize>(&mut self) -> Option<[T; N]> {
         if self.is_empty() {
             None
@@ -1300,7 +1300,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// or `index` is out of bounds.
     ///
     /// Guaranteed to not panic/abort/allocate
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub fn try_remove_array<const N: usize>(&mut self, index: usize) -> Option<[T; N]> {
         if self.len() < index || self.len().wrapping_sub(index) < N {
             None
@@ -1366,7 +1366,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// # Safety
     ///
     /// the collection's remaining capacity must be at least N
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub unsafe fn push_array_unchecked<const N: usize>(&mut self, value: [T; N]) -> &mut [T; N] {
         match S::CONST_CAPACITY {
             Some(n) if n < N => {
@@ -1422,7 +1422,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// * the collection's remaining capacity must be at least N
     /// * hte index must be in bounds
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub unsafe fn insert_array_unchecked<const N: usize>(&mut self, index: usize, value: [T; N]) -> &mut [T; N] {
         match S::CONST_CAPACITY {
             Some(n) if n < N => {
@@ -1481,7 +1481,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// # Safety
     ///
     /// The collection must contain at least `N` elements in it
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub unsafe fn pop_array_unchecked<const N: usize>(&mut self) -> [T; N] {
         match S::CONST_CAPACITY {
             Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),
@@ -1546,7 +1546,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     ///
     /// the collection must contain at least N elements, and
     /// index must be in bounds
-    #[cfg(feature = "nightly")]
+    #[cfg(any(doc, feature = "nightly"))]
     pub unsafe fn remove_array_unchecked<const N: usize>(&mut self, index: usize) -> [T; N] {
         match S::CONST_CAPACITY {
             Some(n) if n < N => panic!("Tried to remove {} elements from a {} capacity vector!", N, n),

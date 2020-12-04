@@ -7,14 +7,14 @@ macro_rules! doc_heap {
     }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 mod nightly;
-#[cfg(not(feature = "nightly"))]
+#[cfg(not(any(doc, feature = "nightly")))]
 mod stable;
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 pub use nightly::Heap;
-#[cfg(not(feature = "nightly"))]
+#[cfg(not(any(doc, feature = "nightly")))]
 pub use stable::Heap;
 
 const INIT_ALLOC_CAPACITY: usize = 4;

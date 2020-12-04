@@ -83,16 +83,17 @@ impl<T, S: ?Sized + Storage<T>> BorrowMut<[T]> for GenericVec<T, S> {
     fn borrow_mut(&mut self) -> &mut [T] { self }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 impl<T, const N: usize> From<[T; N]> for crate::ArrayVec<T, N> {
     fn from(array: [T; N]) -> Self { Self::from_array(array) }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 impl<T: Copy, const N: usize> From<[T; N]> for crate::InitArrayVec<T, N> {
     fn from(array: [T; N]) -> Self { crate::InitArrayVec::<T, N>::new(array) }
 }
 
+#[cfg(not(doc))]
 #[cfg(feature = "alloc")]
 #[cfg(not(feature = "nightly"))]
 impl<T> From<Vec<T>> for crate::HeapVec<T> {
@@ -107,8 +108,8 @@ impl<T> From<Vec<T>> for crate::HeapVec<T> {
     }
 }
 
-#[cfg(feature = "alloc")]
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "alloc"))]
+#[cfg(any(doc, feature = "nightly"))]
 impl<T, A: std::alloc::AllocRef> From<Vec<T, A>> for crate::HeapVec<T, A> {
     fn from(vec: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = vec.into_raw_parts_with_alloc();
@@ -122,6 +123,7 @@ impl<T, A: std::alloc::AllocRef> From<Vec<T, A>> for crate::HeapVec<T, A> {
     }
 }
 
+#[cfg(not(doc))]
 #[cfg(feature = "alloc")]
 #[cfg(not(feature = "nightly"))]
 impl<T> From<crate::HeapVec<T>> for Vec<T> {
@@ -133,8 +135,8 @@ impl<T> From<crate::HeapVec<T>> for Vec<T> {
     }
 }
 
-#[cfg(feature = "alloc")]
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "alloc"))]
+#[cfg(any(doc, feature = "nightly"))]
 impl<T, A: std::alloc::AllocRef> From<crate::HeapVec<T, A>> for Vec<T, A> {
     fn from(vec: crate::HeapVec<T, A>) -> Self {
         let (length, alloc) = vec.into_raw_parts();

@@ -167,6 +167,6 @@ is either exactly the same as `Vec` or slightly adapted to better fit `GenericVe
 Note on implementation: large parts of the implementation came straight from `Vec`
 so thanks for the amazing reference `std`!
 
-Current version: 0.1.1
+Current version: 0.1.2
 
 License: MIT/Apache-2.0

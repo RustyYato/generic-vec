@@ -4,7 +4,7 @@
 use std::boxed::Box;
 
 mod array;
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 mod heap;
 mod slice;
 mod uninit;
@@ -12,7 +12,7 @@ mod zero_sized;
 
 mod capacity;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 pub use heap::Heap;
 
 pub use slice::UninitSlice;
@@ -106,9 +106,9 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     fn try_reserve(&mut self, new_capacity: usize) -> bool { S::try_reserve(self, new_capacity) }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 unsafe impl<T, S: ?Sized + StorageInit<T>> StorageInit<T> for Box<S> {}
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[doc(hidden)]
     const CONST_CAPACITY: Option<usize> = S::CONST_CAPACITY;
@@ -126,7 +126,7 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     fn try_reserve(&mut self, new_capacity: usize) -> bool { S::try_reserve(self, new_capacity) }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(doc, feature = "alloc"))]
 unsafe impl<T, S: ?Sized + StorageWithCapacity<T>> StorageWithCapacity<T> for Box<S> {
     #[inline(always)]
     fn with_capacity(capacity: usize) -> Self { Box::new(S::with_capacity(capacity)) }

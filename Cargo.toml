@@ -1,6 +1,6 @@
 [package]
 name = 'generic-vec'
-version = '0.1.1'
+version = '0.1.2'
 authors = ['RustyYato <krishna.sd.2012@gmail.com>']
 edition = '2018'
 license = 'MIT/Apache-2.0'
