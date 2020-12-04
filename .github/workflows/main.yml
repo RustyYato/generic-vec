@@ -3,6 +3,23 @@ on:
   push:
     branches: [main]
 jobs:
+  docs:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # windows and macos are disabled, because we don't do anything target specific
+        # os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest]
+        rust: [nightly]
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Run doc tests
+      run: cargo +nightly test --verbose --all-features --doc
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -20,4 +37,4 @@ jobs:
         rust-version: ${{ matrix.rust }}
     - uses: actions/checkout@master
     - name: Run tests
-      run: cargo +nightly test --verbose --no-default-features --features "${{ matrix.features_std }}" --features "${{ matrix.features_nightly }}"
+      run: cargo +nightly test --lib --tests --verbose --no-default-features --features "${{ matrix.features_std }}" --features "${{ matrix.features_nightly }}"
