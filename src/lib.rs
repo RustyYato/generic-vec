@@ -14,6 +14,7 @@
         const_panic,
         const_fn,
         const_mut_refs,
+        const_raw_ptr_deref,
     )
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
@@ -117,7 +118,24 @@
 //! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
 //! ```
 //!
-//! ## Nightly
+//! ## `alloc`
+//!
+//! A [`HeapVec`] is just [`Vec`], but built atop [`GenericVec`],
+//! meaning you get all the features of [`GenericVec`] for free! But this
+//! requries either the `alloc` or `std` feature to be enabled.
+//!
+//! ```rust
+//! use generic_vec::{HeapVec, gvec};
+//! let mut vec: HeapVec<u32> = gvec![1, 2, 3, 4];
+//! assert_eq!(vec.capacity(), 4);
+//! vec.extend(&[5, 6, 7, 8]);
+//!
+//! assert_eq!(vec, [1, 2, 3, 4, 5, 6, 7, 8]);
+//!
+//! vec.try_push(5).expect_err("Tried to push past capacity!");
+//! ```
+//!
+//! ## `nightly`
 //!
 //! If you enable the nightly feature then you gain access to
 //! [`ArrayVec`] and [`InitArrayVec`]. These are just like the
@@ -125,7 +143,8 @@
 //! freely moved around, unconstrained. You can also create
 //! a new [`ArrayVec`] without passing in an existing buffer.
 //!
-//! ```rust,ignore
+//! ```rust
+//! # #![cfg_attr(not(feature = "nightly"), ignore)]
 //! use generic_vec::ArrayVec;
 //!
 //! let mut array_vec = ArrayVec::<i32, 16>::new();
@@ -139,10 +158,6 @@
 //!
 //! The distinction between [`ArrayVec`] and [`InitArrayVec`]
 //! is identical to their slice counterparts.
-//!
-//! Finally a [`HeapVec`] is just [`Vec`], but built atop [`GenericVec`],
-//! meaning you get all the features of [`GenericVec`] for free! But this
-//! requries either the `alloc` or `std` feature to be enabled.
 //!
 //! Note on the documentation: if the feature exists on [`Vec`], then the documentation
 //! is either exactly the same as [`Vec`] or slightly adapted to better fit [`GenericVec`]
@@ -409,6 +424,7 @@ impl<T, B, A> TypeVec<T, B, A> {
     /// Create a new [`TypeVec`] with the given alignment type
     pub const fn with_align() -> Self {
         #[cfg(not(feature = "nightly"))]
+        #[allow(clippy::no_effect)]
         {
             [()][(!<raw::UninitBuffer<B, A> as raw::Storage<T>>::IS_ALIGNED) as usize];
         }

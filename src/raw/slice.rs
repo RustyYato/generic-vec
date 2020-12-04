@@ -19,23 +19,22 @@ impl<T> UninitSlice<T> {
     /// # Safety
     ///
     /// You may not write uninitialized memory to this slice
-    pub unsafe fn into_mut(&mut self) -> &mut [MaybeUninit<T>] { unsafe { &mut *(self as *mut Self as *mut [_]) } }
+    pub unsafe fn to_mut(&mut self) -> &mut [MaybeUninit<T>] { unsafe { &mut *(self as *mut Self as *mut [_]) } }
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, T> UninitSlice<'a, T> {
+impl<T> UninitSlice<T> {
     /// Create a new `UninitSlice` storage
-    pub const fn new(buffer: &'a mut [MaybeUninit<T>]) -> Self { Self(buffer) }
-
-    /// Reborrow an `UninitSlice` storage
-    pub const fn as_ref(&mut self) -> UninitSlice<'_, T> { UninitSlice(self.0) }
+    pub const fn from_mut(buffer: &mut [MaybeUninit<T>]) -> &mut Self {
+        unsafe { &mut *(buffer as *mut [_] as *mut Self) }
+    }
 
     /// Get the backing value of the this `Uninit` storage
     ///
     /// # Safety
     ///
     /// You may not write uninitialized memory to this slice
-    pub const unsafe fn into_inner(self) -> &'a mut [MaybeUninit<T>] { self.0 }
+    pub const unsafe fn to_mut(&mut self) -> &mut [MaybeUninit<T>] { unsafe { &mut *(self as *mut Self as *mut [_]) } }
 }
 
 unsafe impl<T, U> Storage<U> for UninitSlice<T> {
