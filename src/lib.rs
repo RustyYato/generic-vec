@@ -15,6 +15,7 @@
         const_fn,
         const_mut_refs,
         const_raw_ptr_deref,
+        doc_cfg,
     )
 )]
 #![cfg_attr(feature = "nightly", forbid(unsafe_op_in_unsafe_fn))]
@@ -39,8 +40,7 @@
 //!
 //! # Basic Usage
 //!
-//! On stable `no_std` you have four choices on for which storage you can use
-//! [`SliceVec`], [`InitSliceVec`], [`TypeVec`], and [`ZSVec`].
+//! ### [`SliceVec`] and [`InitSliceVec`]
 //!
 //! [`SliceVec`] and [`InitSliceVec`] are pretty similar, you give them a slice
 //! buffer, and they store all of thier values in that buffer. But have three major
@@ -83,6 +83,8 @@
 //! slice_vec.push(0);
 //! ```
 //!
+//! ### [`TypeVec`]
+//!
 //! [`TypeVec`] is an owned buffer. You can use like so:
 //!
 //! ```rust
@@ -102,6 +104,41 @@
 //! As a neat side-effect of this framework, you can also get an efficient
 //! [`GenericVec`] for zero-sized types, just a `usize` in size! This feature
 //! can be on stable `no_std`.
+//!
+//! ### [`ArrayVec`](type@ArrayVec) and [`InitArrayVec`](type@InitArrayVec)
+//!
+//! [`ArrayVec`](type@ArrayVec) and [`InitArrayVec`](type@InitArrayVec)
+//! are just like the slice versions, but since they own their data,
+//! they can be freely moved around, unconstrained. You can also create
+//! a new [`ArrayVec`](type@ArrayVec) without passing in an existing buffer,
+//! unlike the slice versions.
+//!
+//! On stable, you can use the [`ArrayVec`](macro@ArrayVec) or
+//! [`InitArrayVec`](macro@InitArrayVec) to construct the type. On `nightly`,
+//! you can use the type aliases [`ArrayVec`](type@ArrayVec) and
+//! [`InitArrayVec`](type@InitArrayVec). The macros will be deprecated once
+//! `min_const_generics` hits stable.
+//!
+//! The only limitation on stable is that you can only use [`InitArrayVec`](type@InitArrayVec)
+//! capacity up to 32. i.e. `InitArrayVec![i32; 33]` doesn't work. `ArrayVec` does not suffer
+//! from this limitation because it is built atop [`TypeVec`].
+//!
+//! ```rust
+//! use generic_vec::ArrayVec;
+//!
+//! let mut array_vec = ArrayVec::<i32, 16>::new();
+//!
+//! array_vec.push(10);
+//! array_vec.push(20);
+//! array_vec.push(30);
+//!
+//! assert_eq!(array_vec, [10, 20, 30]);
+//! ```
+//!
+//! The distinction between [`ArrayVec`](type@ArrayVec) and [`InitArrayVec`](type@InitArrayVec)
+//! is identical to their slice counterparts.
+//!
+//! ### [`ZSVec`]
 //!
 //! ```rust
 //! use generic_vec::ZSVec;
@@ -137,29 +174,17 @@
 //!
 //! ## `nightly`
 //!
-//! If you enable the nightly feature then you gain access to
-//! [`ArrayVec`] and [`InitArrayVec`]. These are just like the
-//! slice versions, but since they own their data, they can be
-//! freely moved around, unconstrained. You can also create
-//! a new [`ArrayVec`] without passing in an existing buffer.
-//!
-//! ```rust
-//! use generic_vec::ArrayVec;
-//!
-//! let mut array_vec = ArrayVec::<i32, 16>::new();
-//!
-//! array_vec.push(10);
-//! array_vec.push(20);
-//! array_vec.push(30);
-//!
-//! assert_eq!(array_vec, [10, 20, 30]);
-//! ```
-//!
-//! The distinction between [`ArrayVec`] and [`InitArrayVec`]
-//! is identical to their slice counterparts.
+//! On `nightly`
+//! * the restriction on [`InitArrayVec`](type@InitArrayVec)'s length goes away.
+//! * many functions/methods become `const fn`s
+//! * a number of optimizations are enabled
+//! * some diagnostics become better
 //!
 //! Note on the documentation: if the feature exists on [`Vec`], then the documentation
 //! is either exactly the same as [`Vec`] or slightly adapted to better fit [`GenericVec`]
+//!
+//! Note on implementation: large parts of the implementation came straight from [`Vec`]
+//! so thanks for the amazing reference `std`!
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -184,23 +209,25 @@ use raw::Storage;
 pub use core;
 
 /// A heap backed vector with a growable capacity
-#[cfg(any(doc, feature = "alloc"))]
-#[cfg(feature = "nightly")]
+#[cfg(all(feature = "alloc", feature = "nightly"))]
+#[cfg_attr(doc, doc(cfg(all(feature = "alloc", feature = "nightly"))))]
 pub type HeapVec<T, A = std::alloc::Global> = GenericVec<T, raw::Heap<T, A>>;
 
 /// A heap backed vector with a growable capacity
-#[cfg(any(doc, feature = "alloc"))]
-#[cfg(not(feature = "nightly"))]
+#[cfg(all(feature = "alloc", not(feature = "nightly")))]
+#[cfg_attr(doc, doc(cfg(feature = "alloc")))]
 pub type HeapVec<T> = GenericVec<T, raw::Heap<T>>;
 
 /// An array backed vector backed by potentially uninitialized memory
-#[cfg(any(doc, feature = "nightly"))]
+#[cfg(feature = "nightly")]
+#[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 pub type ArrayVec<T, const N: usize> = TypeVec<T, [T; N]>;
 /// An slice backed vector backed by potentially uninitialized memory
 pub type SliceVec<'a, T> = GenericVec<T, &'a mut raw::UninitSlice<T>>;
 
 /// An array backed vector backed by initialized memory
-#[cfg(any(doc, feature = "nightly"))]
+#[cfg(feature = "nightly")]
+#[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 pub type InitArrayVec<T, const N: usize> = GenericVec<T, [T; N]>;
 /// An slice backed vector backed by initialized memory
 pub type InitSliceVec<'a, T> = GenericVec<T, &'a mut [T]>;
@@ -333,6 +360,26 @@ pub fn validate_spare<T>(spare_ptr: *const T, orig: &[T]) {
     )
 }
 
+/// An array backed vector backed by potentially uninitialized memory
+///
+/// On `nightly`, it's prefered to use the [`ArrayVec`](type@ArrayVec) type alias
+#[macro_export]
+macro_rules! ArrayVec {
+    ($type:ty; $len:expr) => {
+        $crate::GenericVec<$type, $crate::raw::UninitBuffer<[$type; $len]>>
+    };
+}
+
+/// An array backed vector backed by initialized memory
+///
+/// On `nightly`, it's prefered to use the [`InitArrayVec`](type@InitArrayVec) type alias
+#[macro_export]
+macro_rules! InitArrayVec {
+    ($type:ty; $len:expr) => {
+        $crate::GenericVec<$type, [$type; $len]>
+    };
+}
+
 /// A vector type that can be backed up by a variety of different backends
 /// including slices, arrays, and the heap.
 #[repr(C)]
@@ -393,6 +440,8 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
 #[cfg(feature = "nightly")]
 impl<T, S: Storage<T>> GenericVec<T, S> {
     /// Create a new empty `GenericVec` with the given backend
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
     pub const fn with_storage(storage: S) -> Self {
         assert!(S::IS_ALIGNED, "The storage must be aligned to `T`");
         Self {
@@ -443,7 +492,8 @@ impl<T, B, A> TypeVec<T, B, A> {
     }
 }
 
-#[cfg(any(doc, feature = "nightly"))]
+#[cfg(feature = "nightly")]
+#[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 impl<T, const N: usize> ArrayVec<T, N> {
     /// Create a new full `ArrayVec`
     pub const fn from_array(array: [T; N]) -> Self {
@@ -467,6 +517,7 @@ impl<T, const N: usize> ArrayVec<T, N> {
 }
 
 #[cfg(feature = "nightly")]
+#[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 impl<T: Copy, const N: usize> InitArrayVec<T, N> {
     /// Create a new full `InitArrayVec`
     pub fn new(storage: [T; N]) -> Self {
@@ -479,6 +530,7 @@ impl<T: Copy, const N: usize> InitArrayVec<T, N> {
 }
 
 #[cfg(feature = "alloc")]
+#[cfg_attr(doc, doc(cfg(feature = "alloc")))]
 impl<T> HeapVec<T> {
     /// Create a new empty `HeapVec`
     pub const fn new() -> Self {
@@ -490,8 +542,8 @@ impl<T> HeapVec<T> {
     }
 }
 
-#[cfg(feature = "alloc")]
-#[cfg(feature = "nightly")]
+#[cfg(all(feature = "nightly", feature = "alloc"))]
+#[cfg_attr(doc, doc(cfg(all(feature = "nightly", feature = "alloc"))))]
 impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
     /// Create a new empty `HeapVec` with the given allocator
     pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
@@ -506,16 +558,34 @@ impl<'a, T> SliceVec<'a, T> {
 #[cfg(feature = "nightly")]
 impl<'a, T> SliceVec<'a, T> {
     /// Create a new empty `SliceVec`
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
     pub const fn new(slice: &'a mut [MaybeUninit<T>]) -> Self { Self::with_storage(raw::UninitSlice::from_mut(slice)) }
 }
 
+#[cfg(not(feature = "nightly"))]
 impl<'a, T: Copy> InitSliceVec<'a, T> {
     /// Create a new full `InitSliceVec`
     pub fn new(storage: &'a mut [T]) -> Self {
-        let len = storage.len();
-        let mut vec = Self::with_storage(storage);
-        vec.set_len(len);
-        vec
+        Self {
+            len: storage.len(),
+            storage,
+            mark: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, T: Copy> InitSliceVec<'a, T> {
+    /// Create a new full `InitSliceVec`
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
+    pub const fn new(storage: &'a mut [T]) -> Self {
+        Self {
+            len: storage.len(),
+            storage,
+            mark: PhantomData,
+        }
     }
 }
 
@@ -536,7 +606,31 @@ impl<T, S: Storage<T>> GenericVec<T, S> {
     /// # Panic
     ///
     /// If the given storage cannot hold type `T`, then this method will panic
+    #[cfg(not(feature = "nightly"))]
     pub unsafe fn from_raw_parts(len: usize, storage: S) -> Self {
+        Self {
+            storage,
+            len,
+            mark: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T, S: Storage<T>> GenericVec<T, S> {
+    /// Create a `GenericVec` from a length-storage pair
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
+    ///
+    /// # Safety
+    ///
+    /// the length must be less than `raw.capacity()` and
+    /// all elements in the range `0..length`, must be initialized
+    ///
+    /// # Panic
+    ///
+    /// If the given storage cannot hold type `T`, then this method will panic
+    pub const unsafe fn from_raw_parts(len: usize, storage: S) -> Self {
         Self {
             storage,
             len,
@@ -697,12 +791,14 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     /// Try to reserve enough space for at least `additional` elements, and returns `Err(_)`
     /// if it's not possible to reserve enough space
     #[inline]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), raw::AllocError> {
+    pub fn try_reserve(&mut self, additional: usize) -> bool {
         if self.remaining_capacity() < additional {
-            self.storage
-                .try_reserve(self.len().checked_add(additional).ok_or(raw::AllocError)?)
+            match self.len().checked_add(additional) {
+                Some(new_capacity) => self.storage.try_reserve(new_capacity),
+                None => false,
+            }
         } else {
-            Ok(())
+            true
         }
     }
 

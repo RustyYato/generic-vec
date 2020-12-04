@@ -1,20 +1,10 @@
 //! The raw vector typse that back-up the [`GenericVec`](crate::GenericVec)
 
-#[cfg(feature = "nightly")]
-pub use core::alloc::AllocError;
 #[cfg(feature = "alloc")]
 use std::boxed::Box;
 
-/// The `AllocError` error indicates an allocation failure
-/// that may be due to resource exhaustion or to
-/// something wrong when combining the given input arguments with this
-/// allocator.
-#[cfg(not(feature = "nightly"))]
-pub struct AllocError;
-
-#[cfg(any(doc, feature = "nightly"))]
 mod array;
-#[cfg(any(doc, feature = "alloc"))]
+#[cfg(feature = "alloc")]
 mod heap;
 mod slice;
 mod uninit;
@@ -22,7 +12,7 @@ mod zero_sized;
 
 mod capacity;
 
-#[cfg(any(doc, feature = "alloc"))]
+#[cfg(feature = "alloc")]
 pub use heap::Heap;
 
 pub use slice::UninitSlice;
@@ -78,7 +68,7 @@ pub unsafe trait Storage<T> {
     /// # Safety
     ///
     /// If `Ok(())` is returned, the `capacity` must be at least `new_capacity`
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError>;
+    fn try_reserve(&mut self, new_capacity: usize) -> bool;
 }
 
 /// A storage that can be initially created with a given capacity
@@ -113,7 +103,7 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for &mut S {
     #[inline]
     fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
     #[inline]
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
+    fn try_reserve(&mut self, new_capacity: usize) -> bool { S::try_reserve(self, new_capacity) }
 }
 
 #[cfg(feature = "alloc")]
@@ -133,11 +123,12 @@ unsafe impl<T, S: ?Sized + Storage<T>> Storage<T> for Box<S> {
     #[inline]
     fn reserve(&mut self, new_capacity: usize) { S::reserve(self, new_capacity) }
     #[inline]
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> { S::try_reserve(self, new_capacity) }
+    fn try_reserve(&mut self, new_capacity: usize) -> bool { S::try_reserve(self, new_capacity) }
 }
 
 #[cfg(feature = "alloc")]
 unsafe impl<T, S: ?Sized + StorageWithCapacity<T>> StorageWithCapacity<T> for Box<S> {
+    #[inline(always)]
     fn with_capacity(capacity: usize) -> Self { Box::new(S::with_capacity(capacity)) }
 
     #[doc(hidden)]

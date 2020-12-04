@@ -3,7 +3,7 @@
 
 use core::mem::{align_of, size_of, MaybeUninit};
 
-use super::{AllocError, Storage, StorageWithCapacity};
+use super::{Storage, StorageWithCapacity};
 
 #[repr(C)]
 struct AlignedBuffer<T, A> {
@@ -123,11 +123,5 @@ unsafe impl<U, T, A> Storage<U> for UninitBuffer<T, A> {
         }
     }
 
-    fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {
-        if capacity <= size::<U, T, A>() {
-            Ok(())
-        } else {
-            Err(AllocError)
-        }
-    }
+    fn try_reserve(&mut self, capacity: usize) -> bool { capacity <= size::<U, T, A>() }
 }

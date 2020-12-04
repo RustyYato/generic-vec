@@ -1,6 +1,6 @@
 use crate::raw::{
     capacity::{capacity, Round},
-    AllocError, Storage, StorageWithCapacity,
+    Storage, StorageWithCapacity,
 };
 
 use core::{
@@ -12,6 +12,7 @@ use std::alloc::{alloc, dealloc, handle_alloc_error, realloc};
 
 doc_heap! {
     #[repr(C)]
+    #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
     pub struct Heap<T> {
         capacity: usize,
         ptr: NonNull<T>,
@@ -83,12 +84,12 @@ unsafe impl<T, U> Storage<U> for Heap<T> {
         }
     }
 
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> {
+    fn try_reserve(&mut self, new_capacity: usize) -> bool {
         let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             self.reserve_slow(new_capacity, OnFailure::Error)
         } else {
-            Ok(())
+            true
         }
     }
 }
@@ -163,7 +164,7 @@ unsafe impl<T, U> StorageWithCapacity<U> for Heap<T> {
 impl<T> Heap<T> {
     #[cold]
     #[inline(never)]
-    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> Result<(), AllocError> {
+    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> bool {
         assert!(new_capacity > self.capacity);
 
         // grow by at least doubling
@@ -184,12 +185,12 @@ impl<T> Heap<T> {
         let ptr = match (core::ptr::NonNull::new(ptr), on_failure) {
             (Some(ptr), _) => ptr,
             (None, OnFailure::Abort) => handle_alloc_error(layout),
-            (None, OnFailure::Error) => return Err(AllocError),
+            (None, OnFailure::Error) => return false,
         };
 
         self.ptr = ptr.cast();
         self.capacity = new_capacity;
 
-        Ok(())
+        true
     }
 }

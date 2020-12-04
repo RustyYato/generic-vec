@@ -1,6 +1,6 @@
 use crate::raw::{
     capacity::{capacity, Round},
-    AllocError, Storage, StorageWithCapacity,
+    Storage, StorageWithCapacity,
 };
 
 use core::{
@@ -15,6 +15,9 @@ use std::alloc::{AllocRef, Global};
 
 doc_heap! {
     #[repr(C)]
+    #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
+    ///
+    /// The allocator type paramter is only available on `nightly`
     pub struct Heap<T, A: ?Sized + AllocRef = Global> {
         capacity: usize,
         ptr: NonNull<T>,
@@ -74,6 +77,7 @@ impl<T> Heap<T> {
     }
 }
 
+#[cfg_attr(doc, doc(cfg(feature = "nightly")))]
 impl<T, A: AllocRef> Heap<T, A> {
     /// Create a new zero-capacity heap vector with the given allocator
     pub const fn with_alloc(alloc: A) -> Self {
@@ -132,12 +136,12 @@ unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
         }
     }
 
-    fn try_reserve(&mut self, new_capacity: usize) -> Result<(), AllocError> {
+    fn try_reserve(&mut self, new_capacity: usize) -> bool {
         let new_capacity = capacity(new_capacity, size_of::<U>(), size_of::<T>(), Round::Up);
         if self.capacity < new_capacity {
             self.reserve_slow(new_capacity, OnFailure::Error)
         } else {
-            Ok(())
+            true
         }
     }
 }
@@ -175,7 +179,7 @@ unsafe impl<T, U, A: Default + AllocRef> StorageWithCapacity<U> for Heap<T, A> {
 impl<T, A: ?Sized + AllocRef> Heap<T, A> {
     #[cold]
     #[inline(never)]
-    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> Result<(), AllocError> {
+    fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> bool {
         assert!(new_capacity > self.capacity);
 
         // grow by at least doubling
@@ -196,12 +200,12 @@ impl<T, A: ?Sized + AllocRef> Heap<T, A> {
         let ptr = match (ptr, on_failure) {
             (Ok(ptr), _) => ptr,
             (Err(_), OnFailure::Abort) => handle_alloc_error(layout),
-            (Err(_), OnFailure::Error) => return Err(AllocError),
+            (Err(_), OnFailure::Error) => return false,
         };
 
         self.ptr = ptr.cast();
         self.capacity = new_capacity;
 
-        Ok(())
+        true
     }
 }

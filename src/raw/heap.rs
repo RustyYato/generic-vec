@@ -1,6 +1,8 @@
 macro_rules! doc_heap {
     ($($items:tt)*) => {
-        /// Heap
+        /// A heap storage that can reallocate if necessary,
+        ///
+        /// Usable with the `alloc` feature
         $($items)*
     }
 }

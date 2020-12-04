@@ -1,4 +1,4 @@
-use crate::raw::{AllocError, Storage, StorageWithCapacity};
+use crate::raw::{Storage, StorageWithCapacity};
 use core::marker::PhantomData;
 
 /// A storage that can hold zero sized types
@@ -54,7 +54,7 @@ unsafe impl<T> Storage<T> for ZeroSized<T> {
     #[inline]
     fn reserve(&mut self, _: usize) {}
     #[inline]
-    fn try_reserve(&mut self, _: usize) -> Result<(), AllocError> { Ok(()) }
+    fn try_reserve(&mut self, _: usize) -> bool { true }
     #[inline]
     fn capacity(&self) -> usize { usize::MAX }
 }

@@ -23,8 +23,7 @@ This crate is `no_std` compatible, just turn off all default features.
 
 ## Basic Usage
 
-On stable `no_std` you have four choices on for which storage you can use
-`SliceVec`, `InitSliceVec`, `TypeVec`, and `ZSVec`.
+#### `SliceVec` and `InitSliceVec`
 
 `SliceVec` and `InitSliceVec` are pretty similar, you give them a slice
 buffer, and they store all of thier values in that buffer. But have three major
@@ -65,6 +64,8 @@ let mut slice_vec = InitSliceVec::new(&mut init_buffer);
 slice_vec.push(0);
 ```
 
+#### `TypeVec`
+
 `TypeVec` is an owned buffer. You can use like so:
 
 ```rust
@@ -84,6 +85,41 @@ doing, and after reading the docs for `UninitBuffer`.
 As a neat side-effect of this framework, you can also get an efficient
 `GenericVec` for zero-sized types, just a `usize` in size! This feature
 can be on stable `no_std`.
+
+#### `ArrayVec` and `InitArrayVec`
+
+`ArrayVec` and `InitArrayVec`
+are just like the slice versions, but since they own their data,
+they can be freely moved around, unconstrained. You can also create
+a new `ArrayVec` without passing in an existing buffer,
+unlike the slice versions.
+
+On stable, you can use the `ArrayVec` or
+`InitArrayVec` to construct the type. On `nightly`,
+you can use the type aliases `ArrayVec` and
+`InitArrayVec`. The macros will be deprecated once
+`min_const_generics` hits stable.
+
+The only limitation on stable is that you can only use `InitArrayVec`
+capacity up to 32. i.e. `InitArrayVec![i32; 33]` doesn't work. `ArrayVec` does not suffer
+from this limitation because it is built atop `TypeVec`.
+
+```rust
+use generic_vec::ArrayVec;
+
+let mut array_vec = ArrayVec::<i32, 16>::new();
+
+array_vec.push(10);
+array_vec.push(20);
+array_vec.push(30);
+
+assert_eq!(array_vec, [10, 20, 30]);
+```
+
+The distinction between `ArrayVec` and `InitArrayVec`
+is identical to their slice counterparts.
+
+#### `ZSVec`
 
 ```rust
 use generic_vec::ZSVec;
@@ -119,29 +155,17 @@ vec.try_push(5).expect_err("Tried to push past capacity!");
 
 ### `nightly`
 
-If you enable the nightly feature then you gain access to
-`ArrayVec` and `InitArrayVec`. These are just like the
-slice versions, but since they own their data, they can be
-freely moved around, unconstrained. You can also create
-a new `ArrayVec` without passing in an existing buffer.
-
-```rust
-use generic_vec::ArrayVec;
-
-let mut array_vec = ArrayVec::<i32, 16>::new();
-
-array_vec.push(10);
-array_vec.push(20);
-array_vec.push(30);
-
-assert_eq!(array_vec, [10, 20, 30]);
-```
-
-The distinction between `ArrayVec` and `InitArrayVec`
-is identical to their slice counterparts.
+On `nightly`
+* the restriction on `InitArrayVec`'s length goes away.
+* many functions/methods become `const fn`s
+* a number of optimizations are enabled
+* some diagnostics become better
 
 Note on the documentation: if the feature exists on `Vec`, then the documentation
 is either exactly the same as `Vec` or slightly adapted to better fit `GenericVec`
+
+Note on implementation: large parts of the implementation came straight from `Vec`
+so thanks for the amazing reference `std`!
 
 Current version: 0.1.1
 

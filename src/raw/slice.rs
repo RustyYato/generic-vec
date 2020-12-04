@@ -1,6 +1,6 @@
 use crate::raw::{
     capacity::{capacity, fixed_capacity_reserve_error, Round},
-    AllocError, Storage,
+    Storage,
 };
 
 use core::mem::{align_of, size_of, MaybeUninit};
@@ -28,11 +28,15 @@ impl<T> UninitSlice<T> {
 #[cfg(feature = "nightly")]
 impl<T> UninitSlice<T> {
     /// Create a new `UninitSlice` storage
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
     pub const fn from_mut(buffer: &mut [MaybeUninit<T>]) -> &mut Self {
         unsafe { &mut *(buffer as *mut [_] as *mut Self) }
     }
 
     /// Get the backing value of the this `Uninit` storage
+    ///
+    /// Note: this is only const with the `nightly` feature enabled
     ///
     /// # Safety
     ///
@@ -56,13 +60,7 @@ unsafe impl<T, U> Storage<U> for UninitSlice<T> {
         }
     }
 
-    fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {
-        if capacity <= Storage::<U>::capacity(self) {
-            Ok(())
-        } else {
-            Err(AllocError)
-        }
-    }
+    fn try_reserve(&mut self, capacity: usize) -> bool { capacity <= Storage::<U>::capacity(self) }
 }
 
 unsafe impl<T: Copy> crate::raw::StorageInit<T> for [T] {}
@@ -81,11 +79,5 @@ unsafe impl<T: Copy> Storage<T> for [T] {
         }
     }
 
-    fn try_reserve(&mut self, capacity: usize) -> Result<(), AllocError> {
-        if capacity <= self.capacity() {
-            Ok(())
-        } else {
-            Err(AllocError)
-        }
-    }
+    fn try_reserve(&mut self, capacity: usize) -> bool { capacity <= self.capacity() }
 }
