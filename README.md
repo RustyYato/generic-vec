@@ -100,7 +100,24 @@ assert_eq!(vec.len(), 3);
 assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
 ```
 
-### Nightly
+### `alloc`
+
+A `HeapVec` is just `Vec`, but built atop `GenericVec`,
+meaning you get all the features of `GenericVec` for free! But this
+requries either the `alloc` or `std` feature to be enabled.
+
+```rust
+use generic_vec::{HeapVec, gvec};
+let mut vec: HeapVec<u32> = gvec![1, 2, 3, 4];
+assert_eq!(vec.capacity(), 4);
+vec.extend(&[5, 6, 7, 8]);
+
+assert_eq!(vec, [1, 2, 3, 4, 5, 6, 7, 8]);
+
+vec.try_push(5).expect_err("Tried to push past capacity!");
+```
+
+### `nightly`
 
 If you enable the nightly feature then you gain access to
 `ArrayVec` and `InitArrayVec`. These are just like the
@@ -122,10 +139,6 @@ assert_eq!(array_vec, [10, 20, 30]);
 
 The distinction between `ArrayVec` and `InitArrayVec`
 is identical to their slice counterparts.
-
-Finally a `HeapVec` is just `Vec`, but built atop `GenericVec`,
-meaning you get all the features of `GenericVec` for free! But this
-requries either the `alloc` or `std` feature to be enabled.
 
 Note on the documentation: if the feature exists on `Vec`, then the documentation
 is either exactly the same as `Vec` or slightly adapted to better fit `GenericVec`
