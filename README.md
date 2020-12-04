@@ -1,4 +1,5 @@
 [![Crates.io](https://img.shields.io/crates/v/generic-vec.svg)](https://crates.io/crates/generic-vec)
+[![Docs.rs](https://docs.rs/generic-vec/badge.svg)](https://docs.rs/generic-vec)
 [![Workflow Status](https://github.com/rustyyato/generic-vec/workflows/main/badge.svg)](https://github.com/rustyyato/generic-vec/actions?query=workflow%3A%22main%22)
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
@@ -22,9 +23,12 @@ This crate is `no_std` compatible, just turn off all default features.
 
 ## Basic Usage
 
-On stable `no_std` you have two choices on for which storage you can use
-`SliceVec` or `InitSliceVec`. There are three major differences between
-them.
+On stable `no_std` you have four choices on for which storage you can use
+`SliceVec`, `InitSliceVec`, `TypeVec`, and `ZSVec`.
+
+`SliceVec` and `InitSliceVec` are pretty similar, you give them a slice
+buffer, and they store all of thier values in that buffer. But have three major
+differences between them.
 
 * You can pass an uninitialized buffer to `SliceVec`
 * You can only use `Copy` types with `InitSliceVec`
@@ -61,6 +65,43 @@ let mut slice_vec = InitSliceVec::new(&mut init_buffer);
 slice_vec.push(0);
 ```
 
+`TypeVec` is an owned buffer. You can use like so:
+
+```rust
+use generic_vec::{TypeVec, gvec};
+let mut vec: TypeVec<u32, [u32; 4]> = gvec![1, 2, 3, 4];
+
+assert_eq!(vec, [1, 2, 3, 4]);
+
+vec.try_push(5).expect_err("Tried to push past capacity!");
+```
+
+The second parameter specifies the buffer type, this can be any type
+you want. Only the size of the type matters. There is also a defaulted
+third parameter, but you should only use that if you know what you are
+doing, and after reading the docs for `UninitBuffer`.
+
+As a neat side-effect of this framework, you can also get an efficient
+`GenericVec` for zero-sized types, just a `usize` in size! This feature
+can be on stable `no_std`.
+
+```rust
+use generic_vec::ZSVec;
+
+struct MyType;
+
+let mut vec = ZSVec::new();
+
+vec.push(MyType);
+vec.push(MyType);
+vec.push(MyType);
+
+assert_eq!(vec.len(), 3);
+assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
+```
+
+### Nightly
+
 If you enable the nightly feature then you gain access to
 `ArrayVec` and `InitArrayVec`. These are just like the
 slice versions, but since they own their data, they can be
@@ -86,22 +127,8 @@ Finally a `HeapVec` is just `Vec`, but built atop `GenericVec`,
 meaning you get all the features of `GenericVec` for free! But this
 requries either the `alloc` or `std` feature to be enabled.
 
-As a neat side-effect of this framework, you can also get an efficient
-`GenericVec` for zero-sized types, just a `usize` in size! This feature
-can be on stable `no_std`.
-
-```rust
-use generic_vec::ZSVec;
-
-struct MyType;
-
-let mut vec = ZSVec::new();
-vec.push(MyType);
-vec.push(MyType);
-vec.push(MyType);
-assert_eq!(vec.len(), 3);
-assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
-```
+Note on the documentation: if the feature exists on `Vec`, then the documentation
+is either exactly the same as `Vec` or slightly adapted to better fit `GenericVec`
 
 Current version: 0.1.1
 

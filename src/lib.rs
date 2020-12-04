@@ -85,10 +85,11 @@
 //! [`TypeVec`] is an owned buffer. You can use like so:
 //!
 //! ```rust
-//! use generic_vec::TypeVec;
-//! let mut vec = TypeVec::<u32, [u32; 4]>::new();
-//! vec.extend(&[1, 2, 3, 4]);
+//! use generic_vec::{TypeVec, gvec};
+//! let mut vec: TypeVec<u32, [u32; 4]> = gvec![1, 2, 3, 4];
+//!
 //! assert_eq!(vec, [1, 2, 3, 4]);
+//!
 //! vec.try_push(5).expect_err("Tried to push past capacity!");
 //! ```
 //!
@@ -107,9 +108,11 @@
 //! struct MyType;
 //!
 //! let mut vec = ZSVec::new();
+//!
 //! vec.push(MyType);
 //! vec.push(MyType);
 //! vec.push(MyType);
+//!
 //! assert_eq!(vec.len(), 3);
 //! assert_eq!(std::mem::size_of_val(&vec), std::mem::size_of::<usize>());
 //! ```
@@ -143,7 +146,6 @@
 //!
 //! Note on the documentation: if the feature exists on [`Vec`], then the documentation
 //! is either exactly the same as [`Vec`] or slightly adapted to better fit [`GenericVec`]
-//!
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc as std;
@@ -243,43 +245,12 @@ macro_rules! count {
 /// need to add some type annotations when you use it,
 ///
 /// ```rust
-/// # use generic_vec::{gvec, ZSVec};
-/// struct Foo;
-/// let x: ZSVec<Foo> = gvec![Foo, Foo];
-/// assert_eq!(x.len(), 2);
+/// # use generic_vec::{gvec, TypeVec};
+/// let x: TypeVec<i32, [i32; 4]> = gvec![1, 2, 3, 4];
+/// assert_eq!(x, [1, 2, 3, 4]);
 /// ```
 #[macro_export]
 #[cfg(not(feature = "nightly"))]
-#[cfg(not(feature = "alloc"))]
-macro_rules! gvec {
-    ($expr:expr; $n:expr) => {{
-        let len = $n;
-        let mut vec = $crate::GenericVec::with_capacity(len);
-        vec.grow(len, $expr);
-        vec
-    }};
-    ($($expr:expr),*) => {{
-        let mut vec = $crate::GenericVec::with_capacity($crate::count!($(($expr))*));
-        unsafe {
-            $(vec.push_unchecked($expr);)*
-        }
-        vec
-    }};
-}
-
-/// Create a new generic vector
-///
-/// Because this can create any generic vector, you will likely
-/// need to add some type annotations when you use it,
-///
-/// ```rust
-/// # use generic_vec::{gvec, HeapVec};
-/// let x: HeapVec<_> = gvec![0, 1, 2, 3];
-/// assert_eq!(x, [0, 1, 2, 3]);
-/// ```
-#[macro_export]
-#[cfg(not(feature = "nightly"))]
-#[cfg(feature = "alloc")]
 macro_rules! gvec {
     ($expr:expr; $n:expr) => {{
         let len = $n;
@@ -424,7 +395,7 @@ impl<T, B, A> TypeVec<T, B, A> {
     }
 }
 
-#[cfg(feature = "nightly")]
+#[cfg(any(doc, feature = "nightly"))]
 impl<T, const N: usize> ArrayVec<T, N> {
     /// Create a new full `ArrayVec`
     pub const fn from_array(array: [T; N]) -> Self {
