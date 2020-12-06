@@ -11,6 +11,13 @@ where
 {
     raw: RawCursor<'a, T, S>,
     filter: F,
+    panicking: bool,
+}
+
+struct SetOnDrop<'a>(&'a mut bool);
+
+impl<'a> Drop for SetOnDrop<'a> {
+    fn drop(&mut self) { *self.0 = true; }
 }
 
 impl<'a, T, S, F> DrainFilter<'a, T, S, F>
@@ -18,7 +25,13 @@ where
     S: ?Sized + Storage<T>,
     F: FnMut(&mut T) -> bool,
 {
-    pub(crate) fn new(raw: RawCursor<'a, T, S>, filter: F) -> Self { Self { raw, filter } }
+    pub(crate) fn new(raw: RawCursor<'a, T, S>, filter: F) -> Self {
+        Self {
+            raw,
+            filter,
+            panicking: false,
+        }
+    }
 }
 
 impl<T, S, F> Drop for DrainFilter<'_, T, S, F>
@@ -26,7 +39,11 @@ where
     S: ?Sized + Storage<T>,
     F: FnMut(&mut T) -> bool,
 {
-    fn drop(&mut self) { self.for_each(drop); }
+    fn drop(&mut self) {
+        if !self.panicking {
+            self.for_each(drop);
+        }
+    }
 }
 
 impl<T, S, F> FusedIterator for DrainFilter<'_, T, S, F>
@@ -50,7 +67,12 @@ where
 
             unsafe {
                 let value = self.raw.front_mut();
-                if (self.filter)(value) {
+
+                let on_drop = SetOnDrop(&mut self.panicking);
+                let do_take = (self.filter)(value);
+                core::mem::forget(on_drop);
+
+                if do_take {
                     break Some(self.raw.take_front())
                 } else {
                     self.raw.skip_front();
@@ -78,7 +100,12 @@ where
 
             unsafe {
                 let value = self.raw.back_mut();
-                if (self.filter)(value) {
+
+                let on_drop = SetOnDrop(&mut self.panicking);
+                let do_take = (self.filter)(value);
+                core::mem::forget(on_drop);
+
+                if do_take {
                     break Some(self.raw.take_back())
                 } else {
                     self.raw.skip_back();
