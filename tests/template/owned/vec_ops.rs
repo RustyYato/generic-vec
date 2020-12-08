@@ -29,3 +29,14 @@ fn consume_extend() {
 
     assert_eq!(output.mem_allocated(), output.mem_freed() + leak!(simple));
 }
+
+#[test]
+fn grow() {
+    let output = mockalloc::record_allocs(|| {
+        new_vec!(mut vec, max(4));
+        vec.grow(4, S!(0));
+        assert_eq!(vec, [S!(0), S!(0), S!(0), S!(0)]);
+    });
+
+    assert_eq!(output.mem_allocated(), output.mem_freed() + leak!(simple));
+}

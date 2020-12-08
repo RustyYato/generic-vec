@@ -43,7 +43,7 @@ where
         // which has the pre-condition that there must be at least enough remaining capacity
         // for the slice. So it is safe to write the contents of the slice
         unsafe {
-            for _ in 0..additional {
+            for _ in 1..additional {
                 spare.push_unchecked(value.clone());
             }
 
