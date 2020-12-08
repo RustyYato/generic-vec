@@ -544,7 +544,7 @@ impl<T> HeapVec<T> {
 
 #[cfg(any(doc, all(feature = "nightly", feature = "alloc")))]
 #[cfg_attr(doc, doc(cfg(all(feature = "nightly", feature = "alloc"))))]
-impl<T, A: std::alloc::AllocRef> HeapVec<T, A> {
+impl<T, A: std::alloc::Allocator> HeapVec<T, A> {
     /// Create a new empty `HeapVec` with the given allocator
     pub fn with_alloc(alloc: A) -> Self { Self::with_storage(raw::Heap::with_alloc(alloc)) }
 }

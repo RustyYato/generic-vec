@@ -110,7 +110,7 @@ impl<T> From<Vec<T>> for crate::HeapVec<T> {
 
 #[cfg(any(doc, feature = "alloc"))]
 #[cfg(any(doc, feature = "nightly"))]
-impl<T, A: std::alloc::AllocRef> From<Vec<T, A>> for crate::HeapVec<T, A> {
+impl<T, A: std::alloc::Allocator> From<Vec<T, A>> for crate::HeapVec<T, A> {
     fn from(vec: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = vec.into_raw_parts_with_alloc();
 
@@ -137,7 +137,7 @@ impl<T> From<crate::HeapVec<T>> for Vec<T> {
 
 #[cfg(any(doc, feature = "alloc"))]
 #[cfg(any(doc, feature = "nightly"))]
-impl<T, A: std::alloc::AllocRef> From<crate::HeapVec<T, A>> for Vec<T, A> {
+impl<T, A: std::alloc::Allocator> From<crate::HeapVec<T, A>> for Vec<T, A> {
     fn from(vec: crate::HeapVec<T, A>) -> Self {
         let (length, alloc) = vec.into_raw_parts();
         let (ptr, capacity, alloc) = alloc.into_raw_parts_with_alloc();

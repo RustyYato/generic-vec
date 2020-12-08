@@ -10,34 +10,34 @@ use core::{
 };
 use std::alloc::handle_alloc_error;
 
-use std::alloc::{AllocRef, Global};
+use std::alloc::{Allocator, Global};
 
 doc_heap! {
     #[repr(C)]
     #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
     ///
     /// The allocator type paramter is only available on `nightly`
-    pub struct Heap<T, A: ?Sized + AllocRef = Global> {
+    pub struct Heap<T, A: ?Sized + Allocator = Global> {
         capacity: usize,
         ptr: NonNull<T>,
-        alloc: A,
+        allocator: A,
     }
 }
 
-unsafe impl<T, A: AllocRef + Send> Send for Heap<T, A> {}
-unsafe impl<T, A: AllocRef + Sync> Sync for Heap<T, A> {}
+unsafe impl<T, A: Allocator + Send> Send for Heap<T, A> {}
+unsafe impl<T, A: Allocator + Sync> Sync for Heap<T, A> {}
 
 enum OnFailure {
     Abort,
     Error,
 }
 
-impl<T, A: ?Sized + AllocRef> Drop for Heap<T, A> {
+impl<T, A: ?Sized + Allocator> Drop for Heap<T, A> {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::new::<T>();
             let layout = Layout::from_size_align_unchecked(layout.size() * self.capacity, layout.align());
-            self.alloc.dealloc(self.ptr.cast(), layout);
+            self.allocator.deallocate(self.ptr.cast(), layout);
         }
     }
 }
@@ -48,7 +48,7 @@ impl<T> Heap<T> {
         Self {
             ptr: NonNull::dangling(),
             capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
-            alloc: Global,
+            allocator: Global,
         }
     }
 
@@ -63,7 +63,7 @@ impl<T> Heap<T> {
         Self {
             ptr,
             capacity,
-            alloc: Global,
+            allocator: Global,
         }
     }
 
@@ -77,13 +77,13 @@ impl<T> Heap<T> {
 }
 
 #[cfg_attr(doc, doc(cfg(feature = "nightly")))]
-impl<T, A: AllocRef> Heap<T, A> {
+impl<T, A: Allocator> Heap<T, A> {
     /// Create a new zero-capacity heap vector with the given allocator
-    pub const fn with_alloc(alloc: A) -> Self {
+    pub const fn with_alloc(allocator: A) -> Self {
         Self {
             ptr: NonNull::dangling(),
             capacity: if core::mem::size_of::<T>() == 0 { usize::MAX } else { 0 },
-            alloc,
+            allocator,
         }
     }
 
@@ -94,8 +94,12 @@ impl<T, A: AllocRef> Heap<T, A> {
     /// If the capacity is non-zero
     /// * You must have allocated the pointer from the given allocator
     /// * The pointer must be valid to read-write for the range `ptr..ptr.add(capacity)`
-    pub const unsafe fn from_raw_parts_in(ptr: NonNull<T>, capacity: usize, alloc: A) -> Self {
-        Self { ptr, capacity, alloc }
+    pub const unsafe fn from_raw_parts_in(ptr: NonNull<T>, capacity: usize, allocator: A) -> Self {
+        Self {
+            ptr,
+            capacity,
+            allocator,
+        }
     }
 
     /// Convert a `Heap` storage into a pointer and capacity, without
@@ -103,23 +107,27 @@ impl<T, A: AllocRef> Heap<T, A> {
     pub fn into_raw_parts_with_alloc(self) -> (NonNull<T>, usize, A) {
         #[repr(C)]
         #[allow(dead_code)]
-        struct HeapRepr<T, A: AllocRef> {
+        struct HeapRepr<T, A: Allocator> {
             capacity: usize,
             ptr: NonNull<T>,
-            alloc: A,
+            allocator: A,
         }
 
-        let HeapRepr { ptr, capacity, alloc } = unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) };
+        let HeapRepr {
+            ptr,
+            capacity,
+            allocator,
+        } = unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) };
 
-        (ptr, capacity, alloc)
+        (ptr, capacity, allocator)
     }
 }
 
-impl<T, A: AllocRef + Default> Default for Heap<T, A> {
+impl<T, A: Allocator + Default> Default for Heap<T, A> {
     fn default() -> Self { Self::with_alloc(Default::default()) }
 }
 
-unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
+unsafe impl<T, U, A: ?Sized + Allocator> Storage<U> for Heap<T, A> {
     const IS_ALIGNED: bool = align_of::<T>() >= align_of::<U>();
 
     fn capacity(&self) -> usize { capacity(self.capacity, size_of::<T>(), size_of::<U>(), Round::Down) }
@@ -145,16 +153,16 @@ unsafe impl<T, U, A: ?Sized + AllocRef> Storage<U> for Heap<T, A> {
     }
 }
 
-impl<T, A: Default + AllocRef> Heap<T, A> {
+impl<T, A: Default + Allocator> Heap<T, A> {
     fn with_capacity(capacity: usize) -> Self {
         if core::mem::size_of::<T>() == 0 {
             return Self::default()
         }
 
         let layout = Layout::new::<T>().repeat(capacity).expect("Invalid layout").0;
-        let alloc = A::default();
+        let allocator = A::default();
 
-        let ptr = unsafe { alloc.alloc(layout) };
+        let ptr = unsafe { allocator.allocate(layout) };
 
         let ptr = match ptr {
             Ok(ptr) => ptr,
@@ -164,18 +172,18 @@ impl<T, A: Default + AllocRef> Heap<T, A> {
         Self {
             ptr: ptr.cast(),
             capacity,
-            alloc,
+            allocator,
         }
     }
 }
 
-unsafe impl<T, U, A: Default + AllocRef> StorageWithCapacity<U> for Heap<T, A> {
+unsafe impl<T, U, A: Default + Allocator> StorageWithCapacity<U> for Heap<T, A> {
     fn with_capacity(cap: usize) -> Self {
         Self::with_capacity(capacity(cap, size_of::<U>(), size_of::<T>(), Round::Up))
     }
 }
 
-impl<T, A: ?Sized + AllocRef> Heap<T, A> {
+impl<T, A: ?Sized + Allocator> Heap<T, A> {
     #[cold]
     #[inline(never)]
     fn reserve_slow(&mut self, new_capacity: usize, on_failure: OnFailure) -> bool {
@@ -188,12 +196,12 @@ impl<T, A: ?Sized + AllocRef> Heap<T, A> {
         let layout = Layout::new::<T>().repeat(new_capacity).expect("Invalid layout").0;
 
         let ptr = if self.capacity == 0 {
-            self.alloc.alloc(layout)
+            self.allocator.allocate(layout)
         } else {
             let new_layout = layout;
             let old_layout = Layout::new::<T>().repeat(self.capacity).expect("Invalid layout").0;
 
-            unsafe { self.alloc.grow(self.ptr.cast(), old_layout, new_layout) }
+            unsafe { self.allocator.grow(self.ptr.cast(), old_layout, new_layout) }
         };
 
         let ptr = match (ptr, on_failure) {
