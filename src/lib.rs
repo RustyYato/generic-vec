@@ -1873,7 +1873,7 @@ impl<T, S: ?Sized + Storage<T>> GenericVec<T, S> {
     where
         T: Clone,
     {
-        self.reserve(self.len());
+        self.reserve(slice.len());
 
         // Safety
         //
